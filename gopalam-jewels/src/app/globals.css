@@ -1,21 +1,95 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 body {
-  font-family: 'Inter', sans-serif;
-  background: #0f0f0f;
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  background: #f8f5ef;
   color: #1a1a1a;
 }
 
-.font-playfair {
-  font-family: 'Playfair Display', serif;
+.wrapper {
+  width: 100%;
+}
+
+/* HEADER */
+.header {
+  width: 100%;
+  background: #ffffff;
+  border-bottom: 1px solid #eee;
+}
+
+.header-inner {
+  max-width: 1200px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 20px;
+}
+
+.logo {
+  height: 60px;
+  object-fit: contain;
+}
+
+/* NAV */
+.nav {
+  display: flex;
+  gap: 10px;
+}
+
+.nav button {
+  padding: 10px 16px;
+  background: #c9a84c;
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* CONTENT */
+.container {
+  max-width: 1200px;
+  margin: 30px auto;
+  padding: 0 20px;
+}
+
+.card {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+/* TABLE */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+th {
+  background: #c9a84c;
+  color: #fff;
+  padding: 12px;
+  font-weight: 600;
+}
+
+td {
+  border: 1px solid #eee;
+  padding: 10px;
+}
+
+/* BUTTONS */
+.actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+button.primary {
+  background: #c9a84c;
+  color: #fff;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
 }
