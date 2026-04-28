@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 
-const COLLECTION = "savedProducts";
+export async function GET() {
+  try {
+    const client = await clientPromise;
+    const db = client.db("gopalamJewels");
+    
+    const savedProducts = await db.collection("savedProducts").find({}).toArray();
+
+    return NextResponse.json(savedProducts);
+  } catch (error: any) {
+    console.error("GET saved-products Error:", error);
+    return NextResponse.json({ 
+      error: "Failed to fetch saved products",
+      message: error.message,
+      code: error.code 
+    }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +45,7 @@ export async function POST(request: NextRequest) {
       },
     }));
 
-    await db.collection(COLLECTION).bulkWrite(bulkOps);
+    await db.collection("savedProducts").bulkWrite(bulkOps);
 
     return NextResponse.json({ 
       success: true, 
@@ -37,22 +53,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error("Save Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to save" }, { status: 500 });
-  }
-}
-
-// Add GET handler
-export async function GET() {
-  try {
-    const client = await clientPromise;
-    const db = client.db("gopalamJewels");
-
-    const savedProducts = await db.collection(COLLECTION).find({}).toArray();
-
-    return NextResponse.json(savedProducts);
-  } catch (error: any) {
-    console.error("Fetch Error:", error);
-    return NextResponse.json({ error: "Failed to fetch saved products" }, { status: 500 });
+    console.error("POST saved-products Error:", error);
+    return NextResponse.json({ 
+      error: error.message || "Failed to save products" 
+    }, { status: 500 });
   }
 }
