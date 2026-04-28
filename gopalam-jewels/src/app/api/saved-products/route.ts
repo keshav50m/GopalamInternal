@@ -7,15 +7,10 @@ export async function GET() {
     const db = client.db("gopalamJewels");
     
     const savedProducts = await db.collection("savedProducts").find({}).toArray();
-
     return NextResponse.json(savedProducts);
   } catch (error: any) {
-    console.error("GET saved-products Error:", error);
-    return NextResponse.json({ 
-      error: "Failed to fetch saved products",
-      message: error.message,
-      code: error.code 
-    }, { status: 500 });
+    console.error("GET Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -36,7 +31,7 @@ export async function POST(request: NextRequest) {
         update: {
           $set: {
             barcode: String(item.barcode).trim(),
-            image: item.image || "",
+            image: item.image || "",           // Cloudinary URL
             data: item.data || {},
             updatedAt: new Date(),
           },
@@ -53,9 +48,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error("POST saved-products Error:", error);
-    return NextResponse.json({ 
-      error: error.message || "Failed to save products" 
-    }, { status: 500 });
+    console.error("POST Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
