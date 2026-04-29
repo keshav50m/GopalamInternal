@@ -111,39 +111,27 @@ export default function ProductPanel() {
       if (match.image) {
         updated[index].previewUrl = match.image;
       }
-
-      if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
-        setTimeout(() => {
-          setRows((prevRows) => {
-            if (prevRows.length === index + 1) {
-              return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
-            }
-            return prevRows;
-          });
-        }, 250);
-      }
-
-
     } else if (parts.length >= 6) {   // Increased threshold for safety
       const parsed = parseQRCode(value);
       updated[index].barcode = parsed.BARCODE;
       updated[index].data = parsed;
 
-      // Auto add new row only after full valid scan
-      if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
-        setTimeout(() => {
-          setRows((prevRows) => {
-            if (prevRows.length === index + 1) {
-              return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
-            }
-            return prevRows;
-          });
-        }, 250);
-      }
     } else {
       // Partial input - just update QR, don't parse or add row
       updated[index].barcode = "";
       updated[index].data = null;
+    }
+
+    // Auto add new row only after full valid scan
+    if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
+      setTimeout(() => {
+        setRows((prevRows) => {
+          if (prevRows.length === index + 1) {
+            return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
+          }
+          return prevRows;
+        });
+      }, 250);
     }
 
     setRows(updated);
@@ -157,6 +145,29 @@ export default function ProductPanel() {
       }, 220);
     }
   }, [rows.length]);
+
+  // Adding this for barcode manual input in case QR code is not scanning properly. This allows users to type or paste the barcode and it will fetch data from saved products if available. 
+  const handleManualBarcode = (index: number, value: string) => {
+    const updated = [...rows];
+    updated[index].barcode = value;
+
+    // Search in saved products
+    const match = savedProducts.find(p => String(p.barcode).trim() === value.trim());
+
+    if (match) {
+      updated[index].data = match.data;
+      updated[index].imageUrl = match.image || "";
+      if (match.image) {
+        updated[index].previewUrl = match.image;
+      }
+    } else {
+      updated[index].data = null;
+      updated[index].imageUrl = "";
+      updated[index].previewUrl = "";
+    }
+
+    setRows(updated);
+  };
 
   const handleImage = (index: number, file: File) => {
     if (!file) return;
@@ -321,7 +332,15 @@ export default function ProductPanel() {
                   style={{ width: "260px" }}
                 />
               </td>
-              <td>{row.barcode}</td>
+              {/* <td>{row.barcode}</td> */}
+              <td>
+                <input
+                  value={row.barcode}
+                  onChange={(e) => handleManualBarcode(i, e.target.value)}
+                  placeholder="Enter Barcode"
+                  style={{ width: "100px" }}
+                />
+              </td>
               <td>{row.data?.ITEMNO}</td>
               <td>{row.data?.["STONE NAME"]}</td>
               <td>{row.data?.["GROSS WT"]}</td>
