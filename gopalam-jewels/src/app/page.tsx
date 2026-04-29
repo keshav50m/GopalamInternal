@@ -7,11 +7,10 @@ export default function Page() {
       <div className="header">
         <div className="header-inner">
           <img 
-            src="https://res.cloudinary.com/dbaqd32pw/image/upload/v1777281635/Screenshot_2026-04-27_at_2.42.37_PM_i6xzap.png" 
+            src="https://res.cloudinary.com/dbaqd32pw/image/upload/v1777457314/Screenshot_2026-04-29_at_3.38.16_PM_lqxdn7.png" 
             className="logo" 
             alt="Gopalam Jewels"
           />
-          <h1>Gopalam Jewels - Barcode Scanner</h1>
         </div>
       </div>
 

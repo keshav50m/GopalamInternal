@@ -57,7 +57,7 @@ export default function ProductPanel() {
   //     updated[index].barcode = match.barcode;
   //     updated[index].data = match.data;
   //     updated[index].imageUrl = match.image || "";
-      
+
   //     // Show saved image as preview
   //     if (match.image) {
   //       updated[index].previewUrl = match.image;
@@ -76,41 +76,70 @@ export default function ProductPanel() {
   //   setRows(updated);
 
   //   // ✅ Only add one new row when complete scan is detected
-    // if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
-    //   setTimeout(() => {
-    //     setRows((prevRows) => {
-    //       if (prevRows.length === index + 1) {
-    //         return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
-    //       }
-    //       return prevRows;
-    //     });
-    //   }, 180);
-    // }
+  // if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
+  //   setTimeout(() => {
+  //     setRows((prevRows) => {
+  //       if (prevRows.length === index + 1) {
+  //         return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
+  //       }
+  //       return prevRows;
+  //     });
+  //   }, 180);
+  // }
   // };
 
-    const handleQRScan = (index: number, value: string) => {
+  const handleQRScan = (index: number, value: string) => {
     const updated = [...rows];
     updated[index].qrCode = value;
-
+    let match = null;
     // Only process when we have a full QR code (at least 6-7 parts)
     const parts = value.split(",").map(p => p.trim());
-    
-    if (parts.length >= 6) {   // Increased threshold for safety
+
+    // Check saved products first (MongoDB)
+    if (value.includes(",")) {
+      const barcode = value.split(",")[0].trim();
+      match = savedProducts.find(p => String(p.barcode).trim() === barcode);
+    }
+
+    if (match) {
+      // ✅ Load saved data + image
+      updated[index].barcode = match.barcode;
+      updated[index].data = match.data;
+      updated[index].imageUrl = match.image || "";
+
+      // Show image in preview
+      if (match.image) {
+        updated[index].previewUrl = match.image;
+      }
+
+      if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
+        setTimeout(() => {
+          setRows((prevRows) => {
+            if (prevRows.length === index + 1) {
+              return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
+            }
+            return prevRows;
+          });
+        }, 250);
+      }
+
+
+    } else if (parts.length >= 6) {   // Increased threshold for safety
       const parsed = parseQRCode(value);
       updated[index].barcode = parsed.BARCODE;
       updated[index].data = parsed;
 
       // Auto add new row only after full valid scan
       if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
-      setTimeout(() => {
-        setRows((prevRows) => {
-          if (prevRows.length === index + 1) {
-            return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
-          }
-          return prevRows;
-        });
-      }, 250);
-    }
+        setTimeout(() => {
+          setRows((prevRows) => {
+            if (prevRows.length === index + 1) {
+              return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
+            }
+            return prevRows;
+          });
+        }, 250);
+      }
     } else {
       // Partial input - just update QR, don't parse or add row
       updated[index].barcode = "";
@@ -219,7 +248,7 @@ export default function ProductPanel() {
       pdf.rect(8, y, 195, rowHeight);
       const imgSrc = row.imageUrl || row.previewUrl;
       if (imgSrc) {
-        pdf.addImage(imgSrc, "JPEG", colX.image, y + 3, 32, 22);
+        pdf.addImage(imgSrc, "JPEG", colX.image, y + 3, 32, 22, undefined, "FAST");
       }
 
       const centerY = y + rowHeight / 2 + 2;
@@ -272,10 +301,10 @@ export default function ProductPanel() {
           {rows.map((row, i) => (
             <tr key={i}>
               <td>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={(e) => e.target.files && handleImage(i, e.target.files[0])} 
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => e.target.files && handleImage(i, e.target.files[0])}
                 />
                 {row.previewUrl && (
                   <div style={{ marginTop: "8px" }}>
@@ -305,7 +334,16 @@ export default function ProductPanel() {
                 <button onClick={() => {
                   const updated = rows.filter((_, idx) => idx !== i);
                   setRows(updated.length ? updated : [{ qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }]);
-                }}>
+                }}
+                  style={{
+                    backgroundColor: "#ef4444",
+                    color: "white",
+                    border: "none",
+                    padding: "6px 12px",
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
                   Remove
                 </button>
               </td>
@@ -315,10 +353,48 @@ export default function ProductPanel() {
       </table>
 
       <div style={{ marginTop: "20px", display: "flex", gap: "12px" }}>
-        <button onClick={saveAll} style={{ backgroundColor: "#28a745", color: "white" }}>
+        <button onClick={saveAll} style={{
+          backgroundColor: "#28a745",
+          color: "white",
+          padding: "12px 24px",
+          border: "none",
+          borderRadius: "6px",
+          fontSize: "16px",
+          fontWeight: "bold",
+          cursor: "pointer"
+        }}>
           💾 Save All Products
         </button>
-        <button onClick={exportPDF}>Download PDF</button>
+        <button onClick={exportPDF}
+          style={{
+            backgroundColor: "#3b82f6",
+            color: "white",
+            padding: "12px 24px",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "16px",
+            fontWeight: "bold",
+            cursor: "pointer"
+          }}
+        >Download PDF</button>
+        {/* New Manual Add Row Button */}
+        <button
+          onClick={() => {
+            setRows(prev => [...prev, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }]);
+          }}
+          style={{
+            backgroundColor: "#64748b",
+            color: "white",
+            padding: "12px 20px",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "16px",
+            fontWeight: "bold",
+            cursor: "pointer"
+          }}
+        >
+          + Add Product
+        </button>
       </div>
     </div>
   );
