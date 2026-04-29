@@ -40,43 +40,68 @@ export default function ProductPanel() {
     };
   };
 
-  const handleQRScan = (index: number, value: string) => {
+  // const handleQRScan = (index: number, value: string) => {
+  //   const updated = [...rows];
+  //   updated[index].qrCode = value;
+
+  //   let match = null;
+
+  //   // First priority: Check in savedProducts (MongoDB)
+  //   if (value.includes(",")) {
+  //     const barcode = value.split(",")[0].trim();
+  //     match = savedProducts.find(p => String(p.barcode).trim() === barcode);
+  //   }
+
+  //   if (match) {
+  //     // Load data + saved image from MongoDB
+  //     updated[index].barcode = match.barcode;
+  //     updated[index].data = match.data;
+  //     updated[index].imageUrl = match.image || "";
+      
+  //     // Show saved image as preview
+  //     if (match.image) {
+  //       updated[index].previewUrl = match.image;
+  //     }
+  //   } 
+  //   // If not found in DB, parse from QR code
+  //   else if (value.includes(",") && value.split(",").length >= 4) {
+  //     const parsed = parseQRCode(value);
+  //     updated[index].barcode = parsed.BARCODE;
+  //     updated[index].data = parsed;
+  //   } else {
+  //     updated[index].barcode = "";
+  //     updated[index].data = null;
+  //   }
+
+  //   setRows(updated);
+
+  //   // ✅ Only add one new row when complete scan is detected
+    // if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
+    //   setTimeout(() => {
+    //     setRows((prevRows) => {
+    //       if (prevRows.length === index + 1) {
+    //         return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
+    //       }
+    //       return prevRows;
+    //     });
+    //   }, 180);
+    // }
+  // };
+
+    const handleQRScan = (index: number, value: string) => {
     const updated = [...rows];
     updated[index].qrCode = value;
 
-    let match = null;
-
-    // First priority: Check in savedProducts (MongoDB)
-    if (value.includes(",")) {
-      const barcode = value.split(",")[0].trim();
-      match = savedProducts.find(p => String(p.barcode).trim() === barcode);
-    }
-
-    if (match) {
-      // Load data + saved image from MongoDB
-      updated[index].barcode = match.barcode;
-      updated[index].data = match.data;
-      updated[index].imageUrl = match.image || "";
-      
-      // Show saved image as preview
-      if (match.image) {
-        updated[index].previewUrl = match.image;
-      }
-    } 
-    // If not found in DB, parse from QR code
-    else if (value.includes(",") && value.split(",").length >= 4) {
+    // Only process when we have a full QR code (at least 6-7 parts)
+    const parts = value.split(",").map(p => p.trim());
+    
+    if (parts.length >= 6) {   // Increased threshold for safety
       const parsed = parseQRCode(value);
       updated[index].barcode = parsed.BARCODE;
       updated[index].data = parsed;
-    } else {
-      updated[index].barcode = "";
-      updated[index].data = null;
-    }
 
-    setRows(updated);
-
-    // ✅ Only add one new row when complete scan is detected
-    if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
+      // Auto add new row only after full valid scan
+      if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
       setTimeout(() => {
         setRows((prevRows) => {
           if (prevRows.length === index + 1) {
@@ -86,6 +111,13 @@ export default function ProductPanel() {
         });
       }, 180);
     }
+    } else {
+      // Partial input - just update QR, don't parse or add row
+      updated[index].barcode = "";
+      updated[index].data = null;
+    }
+
+    setRows(updated);
   };
 
   // Auto focus on newest row
