@@ -3,15 +3,14 @@ import { useState, useEffect, useRef } from "react";
 
 export default function ProductPanel() {
   const [rows, setRows] = useState<any[]>([
-    { barcode: "", image: "", data: null, imageUrl: "" },
+    { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null },
   ]);
 
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const lastInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchSavedProducts();
-    setTimeout(() => barcodeInputRef.current?.focus(), 500);
   }, []);
 
   const fetchSavedProducts = async () => {
@@ -26,9 +25,8 @@ export default function ProductPanel() {
     }
   };
 
-  // Parse Scanned Barcode
-  const parseBarcode = (str: string) => {
-    const parts = str.split(",").map(p => p.trim());
+  const parseQRCode = (fullString: string) => {
+    const parts = fullString.split(",").map(p => p.trim());
     return {
       BARCODE: parts[0] || "",
       ITEMNO: parts[1] || "",
@@ -42,89 +40,132 @@ export default function ProductPanel() {
     };
   };
 
-  // Upload image to Cloudinary
-  const uploadToCloudinary = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", "gopalam_jewels"); // You can change this
+  const handleQRScan = (index: number, value: string) => {
+    const updated = [...rows];
+    updated[index].qrCode = value;
 
-    const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-      { method: "POST", body: formData }
-    );
+    let match = null;
 
-    const data = await res.json();
-    return data.secure_url;
+    // First priority: Check in savedProducts (MongoDB)
+    if (value.includes(",")) {
+      const barcode = value.split(",")[0].trim();
+      match = savedProducts.find(p => String(p.barcode).trim() === barcode);
+    }
+
+    if (match) {
+      // Load data + saved image from MongoDB
+      updated[index].barcode = match.barcode;
+      updated[index].data = match.data;
+      updated[index].imageUrl = match.image || "";
+      
+      // Show saved image as preview
+      if (match.image) {
+        updated[index].previewUrl = match.image;
+      }
+    } 
+    // If not found in DB, parse from QR code
+    else if (value.includes(",") && value.split(",").length >= 4) {
+      const parsed = parseQRCode(value);
+      updated[index].barcode = parsed.BARCODE;
+      updated[index].data = parsed;
+    } else {
+      updated[index].barcode = "";
+      updated[index].data = null;
+    }
+
+    setRows(updated);
+
+    // ✅ Only add one new row when complete scan is detected
+    if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
+      setTimeout(() => {
+        setRows((prevRows) => {
+          if (prevRows.length === index + 1) {
+            return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
+          }
+          return prevRows;
+        });
+      }, 180);
+    }
   };
 
-  const handleImage = async (index: number, file: File) => {
+  // Auto focus on newest row
+  useEffect(() => {
+    if (rows.length > 0) {
+      setTimeout(() => {
+        lastInputRef.current?.focus();
+      }, 220);
+    }
+  }, [rows.length]);
+
+  const handleImage = (index: number, file: File) => {
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+
+    const updated = [...rows];
+    updated[index].previewUrl = previewUrl;
+    setRows(updated);
+
+    uploadToCloudinary(file, index);
+  };
+
+  const uploadToCloudinary = async (file: File, index: number) => {
     try {
-      const imageUrl = await uploadToCloudinary(file);
-      const updated = [...rows];
-      updated[index].imageUrl = imageUrl;
-      setRows(updated);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", "gopalam_jewels");
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: "POST", body: formData }
+      );
+      const data = await res.json();
+      if (data.secure_url) {
+        const updated = [...rows];
+        updated[index].imageUrl = data.secure_url;
+        setRows(updated);
+      }
     } catch (err) {
-      alert("Image upload failed");
       console.error(err);
     }
   };
 
-  const handleBarcodeScan = (index: number, value: string) => {
-    if (!value) return;
-
-    const parsedData = parseBarcode(value);
-
-    const updated = [...rows];
-    updated[index].barcode = value;
-    updated[index].data = parsedData;
-
-    setRows(updated);
-
-    // Auto add next row
-    setTimeout(() => {
-      setRows(prev => [...prev, { barcode: "", image: "", data: null, imageUrl: "" }]);
-    }, 150);
-  };
-
   const saveAll = async () => {
-    const productsToSave = rows
-      .filter(r => r.barcode && r.data)
-      .map(r => ({
-        barcode: r.barcode.trim(),
-        image: r.imageUrl || "",           // Now storing Cloudinary URL
-        data: r.data,
-      }));
+    const toSave = rows.filter(r => r.barcode && r.data).map(r => ({
+      barcode: r.barcode,
+      image: r.imageUrl || "",
+      data: r.data,
+    }));
 
-    if (productsToSave.length === 0) return alert("No products to save");
+    if (toSave.length === 0) return alert("No products to save");
 
     try {
       const res = await fetch("/api/saved-products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ products: productsToSave }),
+        body: JSON.stringify({ products: toSave }),
       });
 
       if (res.ok) {
-        alert(`✅ ${productsToSave.length} products saved successfully!`);
+        alert(`✅ ${toSave.length} products saved!`);
         fetchSavedProducts();
-      } else {
-        alert("Failed to save");
       }
     } catch (err) {
-      alert("Error saving products");
+      alert("Save failed");
     }
   };
 
   const exportPDF = async () => {
     const { default: jsPDF } = await import("jspdf");
     const pdf = new jsPDF("p", "mm", "a4");
-    // ... (keep your existing PDF logic)
-    let y = 20;
-    const rowHeight = 26;
-    const colX = { image: 12, barcode: 45, item: 60, stone: 90, gross: 115, stoneWt: 128, dai: 140, price: 152, usd: 165, size: 178 };
 
-    pdf.setFontSize(9);
+    let y = 20;
+    const rowHeight = 28;
+
+    const colX = { image: 12, barcode: 45, item: 68, stone: 92, gross: 115, stoneWt: 135, dai: 155, price: 175, usd: 190, size: 215 };
+
+    pdf.setFontSize(8.5);
     pdf.setFont("helvetica", "bold");
+
     pdf.text("Image", colX.image, y);
     pdf.text("Barcode", colX.barcode, y);
     pdf.text("Item No", colX.item, y);
@@ -142,27 +183,27 @@ export default function ProductPanel() {
     rows.forEach((row) => {
       if (!row.data) return;
       const d = row.data;
-      pdf.rect(8, y, 195, rowHeight);
 
-      if (row.imageUrl) {
-        pdf.addImage(row.imageUrl, "JPEG", colX.image, y + 2, 32, 20);
+      pdf.rect(8, y, 195, rowHeight);
+      const imgSrc = row.imageUrl || row.previewUrl;
+      if (imgSrc) {
+        pdf.addImage(imgSrc, "JPEG", colX.image, y + 3, 32, 22);
       }
 
-      const centerY = y + rowHeight / 2 + 1;
-      const itemNo = d.ITEMNO || d["ITEMNO."] || "";
+      const centerY = y + rowHeight / 2 + 2;
 
       pdf.text(String(row.barcode || ""), colX.barcode, centerY);
-      pdf.text(String(itemNo), colX.item, centerY);
+      pdf.text(String(d.ITEMNO || ""), colX.item, centerY);
       pdf.text(String(d["STONE NAME"] || ""), colX.stone, centerY);
       pdf.text(String(d["GROSS WT"] || ""), colX.gross, centerY);
       pdf.text(String(d["STONE WT"] || ""), colX.stoneWt, centerY);
       pdf.text(String(d["DAI WT"] || ""), colX.dai, centerY);
       pdf.text(String(d["TAG PRICE"] || ""), colX.price, centerY);
       pdf.text(String(d.USD || ""), colX.usd, centerY);
-      pdf.text(String(d.SIZE || "").slice(0, 8), colX.size, centerY);
+      pdf.text(String(d.SIZE || "").slice(0, 12), colX.size, centerY);
 
-      y += rowHeight + 4;
-      if (y > 270) {
+      y += rowHeight + 5;
+      if (y > 265) {
         pdf.addPage();
         y = 20;
       }
@@ -175,13 +216,14 @@ export default function ProductPanel() {
     <div>
       <h2>Barcode Scanner Mode</h2>
       <p style={{ color: "#28a745", fontWeight: "bold" }}>
-        Scan continuously • Auto adds new row
+        Scan QR Code continuously • One row per scan
       </p>
 
       <table>
         <thead>
           <tr>
             <th>Image</th>
+            <th>QR Code</th>
             <th>Barcode</th>
             <th>Item No</th>
             <th>Stone</th>
@@ -203,17 +245,22 @@ export default function ProductPanel() {
                   accept="image/*" 
                   onChange={(e) => e.target.files && handleImage(i, e.target.files[0])} 
                 />
-                {row.imageUrl && <img src={row.imageUrl} width="70" alt="preview" />}
+                {row.previewUrl && (
+                  <div style={{ marginTop: "8px" }}>
+                    <img src={row.previewUrl} alt="preview" width="80" style={{ borderRadius: "6px" }} />
+                  </div>
+                )}
               </td>
               <td>
                 <input
-                  ref={i === 0 ? barcodeInputRef : null}
-                  value={row.barcode}
-                  onChange={(e) => handleBarcodeScan(i, e.target.value)}
-                  placeholder="Scan Barcode Here"
-                  style={{ width: "180px" }}
+                  ref={i === rows.length - 1 ? lastInputRef : null}
+                  value={row.qrCode}
+                  onChange={(e) => handleQRScan(i, e.target.value)}
+                  placeholder="Scan QR Code Here"
+                  style={{ width: "260px" }}
                 />
               </td>
+              <td>{row.barcode}</td>
               <td>{row.data?.ITEMNO}</td>
               <td>{row.data?.["STONE NAME"]}</td>
               <td>{row.data?.["GROSS WT"]}</td>
@@ -225,7 +272,7 @@ export default function ProductPanel() {
               <td>
                 <button onClick={() => {
                   const updated = rows.filter((_, idx) => idx !== i);
-                  setRows(updated.length ? updated : [{ barcode: "", image: "", data: null, imageUrl: "" }]);
+                  setRows(updated.length ? updated : [{ qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }]);
                 }}>
                   Remove
                 </button>
@@ -236,12 +283,10 @@ export default function ProductPanel() {
       </table>
 
       <div style={{ marginTop: "20px", display: "flex", gap: "12px" }}>
-        <button onClick={saveAll} style={{ backgroundColor: "#28a745", color: "white", padding: "10px 16px" }}>
+        <button onClick={saveAll} style={{ backgroundColor: "#28a745", color: "white" }}>
           💾 Save All Products
         </button>
-        <button onClick={exportPDF} style={{ padding: "10px 16px" }}>
-          Download PDF
-        </button>
+        <button onClick={exportPDF}>Download PDF</button>
       </div>
     </div>
   );
