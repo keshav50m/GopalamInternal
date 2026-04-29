@@ -109,7 +109,7 @@ export default function ProductPanel() {
           }
           return prevRows;
         });
-      }, 180);
+      }, 250);
     }
     } else {
       // Partial input - just update QR, don't parse or add row
