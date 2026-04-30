@@ -149,7 +149,7 @@ export default function ProductPanel() {
         } else {
           lastBarcodeRef.current?.focus();
         }
-      }, 220);
+      }, 250);
     }
   }, [rows.length]);
 
