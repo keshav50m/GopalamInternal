@@ -176,6 +176,20 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
 
         const dynamicHeight = Math.max(rowHeight, maxLines * 5 + 10);
 
+        // ✅ PAGE BREAK LOGIC (NO ROW CUT)
+        if (y + dynamicHeight > 280) {
+            pdf.addPage();
+            y = 20;
+
+            // redraw header on new page
+            pdf.setFont("helvetica", "bold");
+            activeFields.forEach((field) => {
+                pdf.text(fieldLabels[field], colX[field], y);
+            });
+            y += 10;
+            pdf.setFont("helvetica", "normal");
+        }
+
         // draw border
         pdf.rect(8, y, 195, dynamicHeight);
 
@@ -194,7 +208,7 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
                 y,
                 colWidthMap["image"],   // 🔥 dynamic width
                 dynamicHeight,
-                `img_${i}`, 
+                `img_${i}`,
                 "FAST"
             );
         }

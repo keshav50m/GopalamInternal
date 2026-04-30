@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { calculateTotals } from "@/utils/calculateTotals";
 
 export default function ProductPanel() {
   const [rows, setRows] = useState<any[]>([
@@ -323,7 +324,7 @@ export default function ProductPanel() {
   });
 
   const [showPopup, setShowPopup] = useState(false);
-
+  const totals = calculateTotals(rows);
   return (
     <div>
       <h2>Barcode Scanner Mode</h2>
@@ -409,8 +410,40 @@ export default function ProductPanel() {
             </tr>
           ))}
         </tbody>
-      </table>
+        <tfoot>
+          <tr style={{ fontWeight: "bold", borderTop: "2px solid black" }}>
+            <td></td> {/* Image */}
+            <td></td> {/* QR */}
+            <td></td> {/* Barcode */}
+            <td></td> {/* Item No */}
+            <td></td> {/* Stone */}
 
+            <td>{totals.totalGross.toFixed(3)}</td>
+            <td>{totals.totalStoneWt.toFixed(2)}</td>
+            <td>{totals.totalDai.toFixed(2)}</td>
+            <td>{totals.totalPrice}</td>
+            <td>{totals.totalUSD.toFixed(2)}</td>
+
+            <td></td> {/* Size */}
+            <td></td> {/* Action (if exists) */}
+          </tr>
+        </tfoot>
+      </table>
+      {/* 🔥 TOTAL ROW ALIGNED WITH TABLE */}
+
+      <div style={{
+        marginTop: "20px",
+        padding: "12px",
+        border: "1px solid #ccc",
+        borderRadius: "6px",
+        background: "#f9fafb",
+        display: "flex",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: "12px"
+      }}>
+        <strong>Total Products: {totals.count}</strong>
+      </div>
       <div style={{ marginTop: "20px", display: "flex", gap: "12px" }}>
         <button onClick={saveAll} style={{
           backgroundColor: "#28a745",
