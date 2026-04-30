@@ -186,7 +186,7 @@ export default function ProductPanel() {
           }
           return prevRows;
         });
-      }, 200);
+      }, 250);
     }
 
     setRows(updated);
