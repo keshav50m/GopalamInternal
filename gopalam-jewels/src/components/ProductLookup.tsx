@@ -134,7 +134,7 @@ export default function ProductPanel() {
           }
           return prevRows;
         });
-      }, 250);
+      }, 300);
     }
 
     setRows(updated);
@@ -149,7 +149,7 @@ export default function ProductPanel() {
         } else {
           lastBarcodeRef.current?.focus();
         }
-      }, 250);
+      }, 300);
     }
   }, [rows.length]);
 
@@ -186,7 +186,7 @@ export default function ProductPanel() {
           }
           return prevRows;
         });
-      }, 250);
+      }, 300);
     }
 
     setRows(updated);
