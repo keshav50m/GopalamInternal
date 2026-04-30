@@ -226,63 +226,103 @@ export default function ProductPanel() {
     }
   };
 
-  const exportPDF = async () => {
-    const { default: jsPDF } = await import("jspdf");
-    const pdf = new jsPDF("p", "mm", "a4");
+  // const compressImage = (src: string, quality = 0.5, maxWidth = 600): Promise<string> => {
+  //   return new Promise((resolve) => {
+  //     const img = new Image();
+  //     img.crossOrigin = "anonymous";
+  //     img.src = src;
 
-    let y = 20;
-    const rowHeight = 28;
+  //     img.onload = () => {
+  //       const canvas = document.createElement("canvas");
+  //       const scale = maxWidth / img.width;
+  //       canvas.width = maxWidth;
+  //       canvas.height = img.height * scale;
 
-    const colX = { image: 12, barcode: 45, item: 68, stone: 92, gross: 115, stoneWt: 135, dai: 155, price: 175, usd: 190, size: 215 };
+  //       const ctx = canvas.getContext("2d");
+  //       ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    pdf.setFontSize(8.5);
-    pdf.setFont("helvetica", "bold");
+  //       const compressed = canvas.toDataURL("image/jpeg", quality);
+  //       resolve(compressed);
+  //     };
+  //   });
+  // };
 
-    pdf.text("Image", colX.image, y);
-    pdf.text("Barcode", colX.barcode, y);
-    pdf.text("Item No", colX.item, y);
-    pdf.text("Stone", colX.stone, y);
-    pdf.text("Gross", colX.gross, y);
-    pdf.text("St Wt", colX.stoneWt, y);
-    pdf.text("DAI", colX.dai, y);
-    pdf.text("Price", colX.price, y);
-    pdf.text("USD", colX.usd, y);
-    pdf.text("Size", colX.size, y);
 
-    y += 8;
-    pdf.setFont("helvetica", "normal");
 
-    rows.forEach((row) => {
-      if (!row.data) return;
-      const d = row.data;
 
-      pdf.rect(8, y, 195, rowHeight);
-      const imgSrc = row.imageUrl || row.previewUrl;
-      if (imgSrc) {
-        pdf.addImage(imgSrc, "JPEG", colX.image, y + 3, 32, 22, undefined, "FAST");
-      }
+  // const exportPDF = async () => {
+  //   const { default: jsPDF } = await import("jspdf");
+  //   const pdf = new jsPDF("p", "mm", "a4");
 
-      const centerY = y + rowHeight / 2 + 2;
+  //   let y = 20;
+  //   const rowHeight = 28;
 
-      pdf.text(String(row.barcode || ""), colX.barcode, centerY);
-      pdf.text(String(d.ITEMNO || ""), colX.item, centerY);
-      pdf.text(String(d["STONE NAME"] || ""), colX.stone, centerY);
-      pdf.text(String(d["GROSS WT"] || ""), colX.gross, centerY);
-      pdf.text(String(d["STONE WT"] || ""), colX.stoneWt, centerY);
-      pdf.text(String(d["DAI WT"] || ""), colX.dai, centerY);
-      pdf.text(String(d["TAG PRICE"] || ""), colX.price, centerY);
-      pdf.text(String(d.USD || ""), colX.usd, centerY);
-      pdf.text(String(d.SIZE || "").slice(0, 12), colX.size, centerY);
+  //   const colX = { image: 12, barcode: 45, item: 68, stone: 92, gross: 115, stoneWt: 135, dai: 155, price: 175, usd: 190, size: 215 };
 
-      y += rowHeight + 5;
-      if (y > 265) {
-        pdf.addPage();
-        y = 20;
-      }
-    });
+  //   pdf.setFontSize(8.5);
+  //   pdf.setFont("helvetica", "bold");
 
-    pdf.save("products.pdf");
-  };
+  //   pdf.text("Image", colX.image, y);
+  //   pdf.text("Barcode", colX.barcode, y);
+  //   pdf.text("Item No", colX.item, y);
+  //   pdf.text("Stone", colX.stone, y);
+  //   pdf.text("Gross", colX.gross, y);
+  //   pdf.text("St Wt", colX.stoneWt, y);
+  //   pdf.text("DAI", colX.dai, y);
+  //   pdf.text("Price", colX.price, y);
+  //   pdf.text("USD", colX.usd, y);
+  //   pdf.text("Size", colX.size, y);
+
+  //   y += 8;
+  //   pdf.setFont("helvetica", "normal");
+
+  //   for (const row of rows) {
+  //     if (!row.data) return;
+  //     const d = row.data;
+
+  //     pdf.rect(8, y, 195, rowHeight);
+  //     const imgSrc = row.imageUrl || row.previewUrl;
+  //     if (imgSrc) {
+  //       const compressedImg = await compressImage(imgSrc, 0.5, 600);
+  //       pdf.addImage(compressedImg, "JPEG", colX.image, y + 3, 32, 22, undefined, "FAST");
+  //     }
+
+  //     const centerY = y + rowHeight / 2 + 2;
+
+  //     pdf.text(String(row.barcode || ""), colX.barcode, centerY);
+  //     pdf.text(String(d.ITEMNO || ""), colX.item, centerY);
+  //     pdf.text(String(d["STONE NAME"] || ""), colX.stone, centerY);
+  //     pdf.text(String(d["GROSS WT"] || ""), colX.gross, centerY);
+  //     pdf.text(String(d["STONE WT"] || ""), colX.stoneWt, centerY);
+  //     pdf.text(String(d["DAI WT"] || ""), colX.dai, centerY);
+  //     pdf.text(String(d["TAG PRICE"] || ""), colX.price, centerY);
+  //     pdf.text(String(d.USD || ""), colX.usd, centerY);
+  //     pdf.text(String(d.SIZE || "").slice(0, 12), colX.size, centerY);
+
+  //     y += rowHeight + 5;
+  //     if (y > 265) {
+  //       pdf.addPage();
+  //       y = 20;
+  //     }
+  //   };
+
+  //   pdf.save("products.pdf");
+  // };
+
+  const [selectedFields, setSelectedFields] = useState({
+    image: true,
+    barcode: true,
+    item: true,
+    stone: true,
+    gross: true,
+    stoneWt: true,
+    dai: true,
+    price: true,
+    usd: true,
+    size: true,
+  });
+
+  const [showPopup, setShowPopup] = useState(false);
 
   return (
     <div>
@@ -384,7 +424,8 @@ export default function ProductPanel() {
         }}>
           💾 Save All Products
         </button>
-        <button onClick={exportPDF}
+        <button onClick={() => setShowPopup(true)}
+
           style={{
             backgroundColor: "#3b82f6",
             color: "white",
@@ -396,6 +437,61 @@ export default function ProductPanel() {
             cursor: "pointer"
           }}
         >Download PDF</button>
+        {showPopup && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000
+          }}>
+            <div style={{
+              background: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              minWidth: "300px"
+            }}>
+              <h3>Select Fields</h3>
+
+              {Object.keys(selectedFields).map((key) => (
+                <label key={key} style={{ display: "block" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedFields[key as keyof typeof selectedFields]}
+                    onChange={() =>
+                      setSelectedFields(prev => ({
+                        ...prev,
+                        [key]: !prev[key as keyof typeof prev]
+                      }))
+                    }
+                  />
+                  {key}
+                </label>
+              ))}
+
+              <div style={{ marginTop: "15px" }}>
+                <button
+                  onClick={async () => {
+                    const { generatePDF } = await import("@/utils/generatePDF");
+                    generatePDF(rows, selectedFields);
+                    setShowPopup(false);
+                  }}
+                >
+                  Generate PDF
+                </button>
+
+                <button onClick={() => setShowPopup(false)} style={{ marginLeft: "10px" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* New Manual Add Row Button */}
         <button
           onClick={() => {
