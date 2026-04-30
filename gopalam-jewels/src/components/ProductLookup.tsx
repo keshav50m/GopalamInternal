@@ -8,7 +8,9 @@ export default function ProductPanel() {
   ]);
 
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
-  const lastInputRef = useRef<HTMLInputElement>(null);
+  const lastQRRef = useRef<HTMLInputElement>(null);
+  const lastBarcodeRef = useRef<HTMLInputElement>(null);
+  const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
 
   useEffect(() => {
     fetchSavedProducts();
@@ -122,7 +124,7 @@ export default function ProductPanel() {
       updated[index].barcode = "";
       updated[index].data = null;
     }
-
+    setFocusField("qr");
     // Auto add new row only after full valid scan
     if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
       setTimeout(() => {
@@ -142,7 +144,11 @@ export default function ProductPanel() {
   useEffect(() => {
     if (rows.length > 0) {
       setTimeout(() => {
-        lastInputRef.current?.focus();
+        if (focusField === "qr") {
+          lastQRRef.current?.focus();
+        } else {
+          lastBarcodeRef.current?.focus();
+        }
       }, 220);
     }
   }, [rows.length]);
@@ -165,6 +171,22 @@ export default function ProductPanel() {
       updated[index].data = null;
       updated[index].imageUrl = "";
       updated[index].previewUrl = "";
+    }
+    setFocusField("barcode");
+
+    // ✅ AUTO ADD NEW ROW (same as QR)
+    if (index === rows.length - 1 && value.trim() !== "") {
+      setTimeout(() => {
+        setRows((prevRows) => {
+          if (prevRows.length === index + 1) {
+            return [
+              ...prevRows,
+              { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }
+            ];
+          }
+          return prevRows;
+        });
+      }, 200);
     }
 
     setRows(updated);
@@ -352,7 +374,7 @@ export default function ProductPanel() {
         <tbody>
           {rows.map((row, i) => (
             <tr key={i}>
-              <td>
+              {/* <td>
                 <input
                   type="file"
                   accept="image/*"
@@ -363,10 +385,53 @@ export default function ProductPanel() {
                     <img src={row.previewUrl} alt="preview" width="80" style={{ borderRadius: "6px" }} />
                   </div>
                 )}
+              </td> */}
+              <td>
+                {/* Hidden file input */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  id={`file-${i}`}
+                  style={{ display: "none" }}
+                  onChange={(e) => e.target.files && handleImage(i, e.target.files[0])}
+                />
+
+                {/* Custom button */}
+                <label
+                  htmlFor={`file-${i}`}
+                  style={{
+                    display: "inline-block",
+                    padding: "2px 6px",          // 🔻 reduced padding
+                    fontSize: "11px",           // 🔻 smaller text
+                    lineHeight: "1",            // 🔻 prevent extra height
+                    whiteSpace: "nowrap",       // ✅ force single line
+                    background: "#eee",
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Choose File
+                </label>
+
+                {/* Image preview OR fallback text */}
+                {row.previewUrl || row.imageUrl ? (
+                  <div style={{ marginTop: "8px" }}>
+                    <img
+                      src={row.previewUrl || row.imageUrl}
+                      alt="preview"
+                      width="80"
+                      style={{ borderRadius: "6px" }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "12px", color: "#888", marginTop: "6px" }}>
+                    No file selected
+                  </div>
+                )}
               </td>
               <td>
                 <input
-                  ref={i === rows.length - 1 ? lastInputRef : null}
+                  ref={i === rows.length - 1 ? lastQRRef : null}
                   value={row.qrCode}
                   onChange={(e) => handleQRScan(i, e.target.value)}
                   placeholder="Scan QR Code Here"
@@ -376,6 +441,7 @@ export default function ProductPanel() {
               {/* <td>{row.barcode}</td> */}
               <td>
                 <input
+                  ref={i === rows.length - 1 ? lastBarcodeRef : null}
                   value={row.barcode}
                   onChange={(e) => handleManualBarcode(i, e.target.value)}
                   placeholder="Enter Barcode"
