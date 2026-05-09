@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { calculateTotals } from "@/utils/calculateTotals";
+import ProductTable from "@/components/productTable";
+import ExcelUpload from "@/components/ExcelUpload";
 
 export default function ProductPanel() {
   const [rows, setRows] = useState<any[]>([
@@ -11,6 +13,7 @@ export default function ProductPanel() {
   const lastQRRef = useRef<HTMLInputElement>(null);
   const lastBarcodeRef = useRef<HTMLInputElement>(null);
   const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
+  const [companyName, setCompanyName] = useState("");
 
   useEffect(() => {
     fetchSavedProducts();
@@ -42,54 +45,6 @@ export default function ProductPanel() {
       USD: parts[8] || "",
     };
   };
-
-  // const handleQRScan = (index: number, value: string) => {
-  //   const updated = [...rows];
-  //   updated[index].qrCode = value;
-
-  //   let match = null;
-
-  //   // First priority: Check in savedProducts (MongoDB)
-  //   if (value.includes(",")) {
-  //     const barcode = value.split(",")[0].trim();
-  //     match = savedProducts.find(p => String(p.barcode).trim() === barcode);
-  //   }
-
-  //   if (match) {
-  //     // Load data + saved image from MongoDB
-  //     updated[index].barcode = match.barcode;
-  //     updated[index].data = match.data;
-  //     updated[index].imageUrl = match.image || "";
-
-  //     // Show saved image as preview
-  //     if (match.image) {
-  //       updated[index].previewUrl = match.image;
-  //     }
-  //   } 
-  //   // If not found in DB, parse from QR code
-  //   else if (value.includes(",") && value.split(",").length >= 4) {
-  //     const parsed = parseQRCode(value);
-  //     updated[index].barcode = parsed.BARCODE;
-  //     updated[index].data = parsed;
-  //   } else {
-  //     updated[index].barcode = "";
-  //     updated[index].data = null;
-  //   }
-
-  //   setRows(updated);
-
-  //   // ✅ Only add one new row when complete scan is detected
-  // if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
-  //   setTimeout(() => {
-  //     setRows((prevRows) => {
-  //       if (prevRows.length === index + 1) {
-  //         return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
-  //       }
-  //       return prevRows;
-  //     });
-  //   }, 180);
-  // }
-  // };
 
   const handleQRScan = (index: number, value: string) => {
     const updated = [...rows];
@@ -134,7 +89,7 @@ export default function ProductPanel() {
           }
           return prevRows;
         });
-      }, 300);
+      }, 1000);
     }
 
     setRows(updated);
@@ -149,7 +104,7 @@ export default function ProductPanel() {
         } else {
           lastBarcodeRef.current?.focus();
         }
-      }, 300);
+      }, 1000);
     }
   }, [rows.length]);
 
@@ -186,7 +141,7 @@ export default function ProductPanel() {
           }
           return prevRows;
         });
-      }, 300);
+      }, 2000);
     }
 
     setRows(updated);
@@ -249,89 +204,6 @@ export default function ProductPanel() {
     }
   };
 
-  // const compressImage = (src: string, quality = 0.5, maxWidth = 600): Promise<string> => {
-  //   return new Promise((resolve) => {
-  //     const img = new Image();
-  //     img.crossOrigin = "anonymous";
-  //     img.src = src;
-
-  //     img.onload = () => {
-  //       const canvas = document.createElement("canvas");
-  //       const scale = maxWidth / img.width;
-  //       canvas.width = maxWidth;
-  //       canvas.height = img.height * scale;
-
-  //       const ctx = canvas.getContext("2d");
-  //       ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-  //       const compressed = canvas.toDataURL("image/jpeg", quality);
-  //       resolve(compressed);
-  //     };
-  //   });
-  // };
-
-
-
-
-  // const exportPDF = async () => {
-  //   const { default: jsPDF } = await import("jspdf");
-  //   const pdf = new jsPDF("p", "mm", "a4");
-
-  //   let y = 20;
-  //   const rowHeight = 28;
-
-  //   const colX = { image: 12, barcode: 45, item: 68, stone: 92, gross: 115, stoneWt: 135, dai: 155, price: 175, usd: 190, size: 215 };
-
-  //   pdf.setFontSize(8.5);
-  //   pdf.setFont("helvetica", "bold");
-
-  //   pdf.text("Image", colX.image, y);
-  //   pdf.text("Barcode", colX.barcode, y);
-  //   pdf.text("Item No", colX.item, y);
-  //   pdf.text("Stone", colX.stone, y);
-  //   pdf.text("Gross", colX.gross, y);
-  //   pdf.text("St Wt", colX.stoneWt, y);
-  //   pdf.text("DAI", colX.dai, y);
-  //   pdf.text("Price", colX.price, y);
-  //   pdf.text("USD", colX.usd, y);
-  //   pdf.text("Size", colX.size, y);
-
-  //   y += 8;
-  //   pdf.setFont("helvetica", "normal");
-
-  //   for (const row of rows) {
-  //     if (!row.data) return;
-  //     const d = row.data;
-
-  //     pdf.rect(8, y, 195, rowHeight);
-  //     const imgSrc = row.imageUrl || row.previewUrl;
-  //     if (imgSrc) {
-  //       const compressedImg = await compressImage(imgSrc, 0.5, 600);
-  //       pdf.addImage(compressedImg, "JPEG", colX.image, y + 3, 32, 22, undefined, "FAST");
-  //     }
-
-  //     const centerY = y + rowHeight / 2 + 2;
-
-  //     pdf.text(String(row.barcode || ""), colX.barcode, centerY);
-  //     pdf.text(String(d.ITEMNO || ""), colX.item, centerY);
-  //     pdf.text(String(d["STONE NAME"] || ""), colX.stone, centerY);
-  //     pdf.text(String(d["GROSS WT"] || ""), colX.gross, centerY);
-  //     pdf.text(String(d["STONE WT"] || ""), colX.stoneWt, centerY);
-  //     pdf.text(String(d["DAI WT"] || ""), colX.dai, centerY);
-  //     pdf.text(String(d["TAG PRICE"] || ""), colX.price, centerY);
-  //     pdf.text(String(d.USD || ""), colX.usd, centerY);
-  //     pdf.text(String(d.SIZE || "").slice(0, 12), colX.size, centerY);
-
-  //     y += rowHeight + 5;
-  //     if (y > 265) {
-  //       pdf.addPage();
-  //       y = 20;
-  //     }
-  //   };
-
-  //   pdf.save("products.pdf");
-  // };
-
   const [selectedFields, setSelectedFields] = useState({
     image: true,
     barcode: true,
@@ -349,152 +221,35 @@ export default function ProductPanel() {
   const totals = calculateTotals(rows);
   return (
     <div>
-      <h2>Barcode Scanner Mode</h2>
-      <p style={{ color: "#28a745", fontWeight: "bold" }}>
-        Scan QR Code continuously • One row per scan
-      </p>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "10px"
+      }}>
+        <div>
+          <h2>Barcode Scanner Mode</h2>
+          <p style={{ color: "#28a745", fontWeight: "bold" }}>
+            Scan QR Code continuously • One row per scan
+          </p>
+        </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Image</th>
-            <th>QR Code</th>
-            <th>Barcode</th>
-            <th>Item No</th>
-            <th>Stone</th>
-            <th>Gross</th>
-            <th>StoneWt</th>
-            <th>DAI</th>
-            <th>Price</th>
-            <th>USD</th>
-            <th>Size</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i}>
-              {/* <td>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => e.target.files && handleImage(i, e.target.files[0])}
-                />
-                {row.previewUrl && (
-                  <div style={{ marginTop: "8px" }}>
-                    <img src={row.previewUrl} alt="preview" width="80" style={{ borderRadius: "6px" }} />
-                  </div>
-                )}
-              </td> */}
-              <td>
-                {/* Hidden file input */}
-                <input
-                  type="file"
-                  accept="image/*"
-                  id={`file-${i}`}
-                  style={{ display: "none" }}
-                  onChange={(e) => e.target.files && handleImage(i, e.target.files[0])}
-                />
+        <div>
+          <h3>Excel Upload</h3>
+          <ExcelUpload setRows={setRows} savedProducts={savedProducts} />
+        </div>
+      </div>
 
-                {/* Custom button */}
-                <label
-                  htmlFor={`file-${i}`}
-                  style={{
-                    display: "inline-block",
-                    padding: "2px 6px",          // 🔻 reduced padding
-                    fontSize: "11px",           // 🔻 smaller text
-                    lineHeight: "1",            // 🔻 prevent extra height
-                    whiteSpace: "nowrap",       // ✅ force single line
-                    background: "#eee",
-                    borderRadius: "4px",
-                    cursor: "pointer"
-                  }}
-                >
-                  Choose File
-                </label>
-
-                {/* Image preview OR fallback text */}
-                {row.previewUrl || row.imageUrl ? (
-                  <div style={{ marginTop: "8px" }}>
-                    <img
-                      src={row.previewUrl || row.imageUrl}
-                      alt="preview"
-                      width="80"
-                      style={{ borderRadius: "6px" }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ fontSize: "12px", color: "#888", marginTop: "6px" }}>
-                    No file selected
-                  </div>
-                )}
-              </td>
-              <td>
-                <input
-                  ref={i === rows.length - 1 ? lastQRRef : null}
-                  value={row.qrCode}
-                  onChange={(e) => handleQRScan(i, e.target.value)}
-                  placeholder="Scan QR Code Here"
-                  style={{ width: "260px" }}
-                />
-              </td>
-              {/* <td>{row.barcode}</td> */}
-              <td>
-                <input
-                  ref={i === rows.length - 1 ? lastBarcodeRef : null}
-                  value={row.barcode}
-                  onChange={(e) => handleManualBarcode(i, e.target.value)}
-                  placeholder="Enter Barcode"
-                  style={{ width: "100px" }}
-                />
-              </td>
-              <td>{row.data?.ITEMNO}</td>
-              <td>{row.data?.["STONE NAME"]}</td>
-              <td>{row.data?.["GROSS WT"]}</td>
-              <td>{row.data?.["STONE WT"]}</td>
-              <td>{row.data?.["DAI WT"]}</td>
-              <td>{row.data?.["TAG PRICE"]}</td>
-              <td>{row.data?.USD}</td>
-              <td>{row.data?.SIZE}</td>
-              <td>
-                <button onClick={() => {
-                  const updated = rows.filter((_, idx) => idx !== i);
-                  setRows(updated.length ? updated : [{ qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }]);
-                }}
-                  style={{
-                    backgroundColor: "#ef4444",
-                    color: "white",
-                    border: "none",
-                    padding: "6px 12px",
-                    borderRadius: "4px",
-                    cursor: "pointer"
-                  }}
-                >
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr style={{ fontWeight: "bold", borderTop: "2px solid black" }}>
-            <td></td> {/* Image */}
-            <td></td> {/* QR */}
-            <td></td> {/* Barcode */}
-            <td></td> {/* Item No */}
-            <td></td> {/* Stone */}
-
-            <td>{totals.totalGross.toFixed(3)}</td>
-            <td>{totals.totalStoneWt.toFixed(2)}</td>
-            <td>{totals.totalDai.toFixed(2)}</td>
-            <td>{totals.totalPrice}</td>
-            <td>{totals.totalUSD.toFixed(2)}</td>
-
-            <td></td> {/* Size */}
-            <td></td> {/* Action (if exists) */}
-          </tr>
-        </tfoot>
-      </table>
+      <ProductTable
+        rows={rows}
+        setRows={setRows}
+        handleQRScan={handleQRScan}
+        handleManualBarcode={handleManualBarcode}
+        handleImage={handleImage}
+        lastQRRef={lastQRRef}
+        lastBarcodeRef={lastBarcodeRef}
+        totals={totals}
+      />
       {/* 🔥 TOTAL ROW ALIGNED WITH TABLE */}
 
       <div style={{
@@ -537,6 +292,7 @@ export default function ProductPanel() {
           }}
         >Download PDF</button>
         {showPopup && (
+
           <div style={{
             position: "fixed",
             top: 0,
@@ -555,6 +311,24 @@ export default function ProductPanel() {
               borderRadius: "8px",
               minWidth: "300px"
             }}>
+              <div style={{ marginBottom: "10px" }}>
+                <label style={{ display: "block", fontWeight: "bold" }}>
+                  Company Name
+                </label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Enter Company Name"
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    marginTop: "4px",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc"
+                  }}
+                />
+              </div>
               <h3>Select Fields</h3>
 
               {Object.keys(selectedFields).map((key) => (
@@ -577,7 +351,7 @@ export default function ProductPanel() {
                 <button
                   onClick={async () => {
                     const { generatePDF } = await import("@/utils/generatePDF");
-                    generatePDF(rows, selectedFields);
+                    generatePDF(rows, selectedFields, companyName);
                     setShowPopup(false);
                   }}
                 >

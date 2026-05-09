@@ -1,25 +1,5 @@
 import jsPDF from "jspdf";
 
-// const compressImage = (src: string, quality = 0.5, maxWidth = 600): Promise<string> => {
-//     return new Promise((resolve) => {
-//         const img = new Image();
-//         img.crossOrigin = "anonymous";
-//         img.src = src;
-
-//         img.onload = () => {
-//             const canvas = document.createElement("canvas");
-//             const scale = maxWidth / img.width;
-//             canvas.width = maxWidth;
-//             canvas.height = img.height * scale;
-
-//             const ctx = canvas.getContext("2d");
-//             ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-//             const compressed = canvas.toDataURL("image/jpeg", quality);
-//             resolve(compressed);
-//         };
-//     });
-// };
 
 const compressImage = async (src: string, quality = 0.5, maxWidth = 600) => {
     const response = await fetch(src);
@@ -44,11 +24,34 @@ const compressImage = async (src: string, quality = 0.5, maxWidth = 600) => {
     });
 };
 
-export const generatePDF = async (rows: any[], selectedFields: Record<string, boolean>) => {
+
+
+export const generatePDF = async (rows: any[], selectedFields: Record<string, boolean>, companyName: string
+) => {
+
     const { default: jsPDF } = await import("jspdf");
     const pdf = new jsPDF("p", "mm", "a4");
 
-    let y = 20;
+    pdf.setFontSize(14);
+    pdf.setFont("helvetica", "bold");
+
+    pdf.text(
+        companyName,
+        pdf.internal.pageSize.getWidth() / 2,
+        15,
+        { align: "center" }
+    );
+
+    // reset
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+
+    const today = new Date().toLocaleDateString();
+
+    pdf.setFontSize(10);
+    pdf.text(today, 10, 10); // top-left
+
+    let y = 25;
     const rowHeight = 28;
     const startX = 8;
     const totalWidth = 195;
@@ -122,30 +125,6 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
             return pdf.splitTextToSize(text, maxWidth);
         };
 
-        // // prepare wrapped content
-        // const barcode = splitText(String(row.barcode || ""), 20);
-        // const item = splitText(String(d.ITEMNO || ""), 22);
-        // const stone = splitText(String(d["STONE NAME"] || ""), 22);
-        // const gross = splitText(String(d["GROSS WT"] || ""), 15);
-        // const stoneWt = splitText(String(d["STONE WT"] || ""), 15);
-        // const dai = splitText(String(d["DAI WT"] || ""), 15);
-        // const price = splitText(String(d["TAG PRICE"] || ""), 18);
-        // const usd = splitText(String(d.USD || ""), 18);
-        // const size = splitText(String(d.SIZE || ""), 18);
-
-        // // find max lines → dynamic row height
-        // const maxLines = Math.max(
-        //     barcode.length,
-        //     item.length,
-        //     stone.length,
-        //     gross.length,
-        //     stoneWt.length,
-        //     dai.length,
-        //     price.length,
-        //     usd.length,
-        //     size.length
-        // );
-
         let maxLines = 1;
 
         activeFields.forEach((field) => {
@@ -179,8 +158,24 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         // ✅ PAGE BREAK LOGIC (NO ROW CUT)
         if (y + dynamicHeight > 280) {
             pdf.addPage();
-            y = 20;
 
+            // 👉 company name (ADD THIS)
+            pdf.setFontSize(14);
+            pdf.setFont("helvetica", "bold");
+            pdf.text(
+                companyName,
+                pdf.internal.pageSize.getWidth() / 2,
+                15,
+                { align: "center" }
+            );
+
+            // 👉 date (already there)
+            pdf.setFontSize(10);
+            pdf.setFont("helvetica", "normal");
+            pdf.text(today, 10, 10);
+
+            // 👉 adjust Y (IMPORTANT)
+            y = 25;
             // redraw header on new page
             pdf.setFont("helvetica", "bold");
             activeFields.forEach((field) => {
@@ -224,16 +219,6 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         activeFields.forEach((field) => {
             let value = "";
 
-            // if (field === "barcode") value = row.barcode;
-            // else if (field === "item") value = d.ITEMNO;
-            // else if (field === "stone") value = d["STONE NAME"];
-            // else if (field === "gross") value = d["GROSS WT"];
-            // else if (field === "stoneWt") value = d["STONE WT"];
-            // else if (field === "dai") value = d["DAI WT"];
-            // else if (field === "price") value = d["TAG PRICE"];
-            // else if (field === "usd") value = d.USD;
-            // else if (field === "size") value = d.SIZE;
-
             if (field === "barcode") value = String(row.barcode || "");
             else if (field === "item") value = String(d.ITEMNO || "");
             else if (field === "stone") value = String(d["STONE NAME"] || "");
@@ -254,7 +239,13 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
                 });
             }
 
-            else if (field === "dai") value = String(d["DAI WT"] || "");
+            else if (field === "dai") {
+                const num = parseFloat(d["DAI WT"] || "0");
+                value = num.toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
             else if (field === "price") value = String(d["TAG PRICE"] || "");
             else if (field === "usd") value = String(d.USD || "");
             else if (field === "size") value = String(d.SIZE || "");
@@ -268,7 +259,19 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         // move Y dynamically
         y += dynamicHeight + 5;
     }
+    const pageCount = pdf.getNumberOfPages();
 
+    for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+
+        pdf.setFontSize(10);
+
+        pdf.text(
+            `${i}/${pageCount}`,
+            pdf.internal.pageSize.getWidth() - 10,
+            pdf.internal.pageSize.getHeight() - 10
+        );
+    }
 
     pdf.save("products.pdf");
 };
