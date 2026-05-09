@@ -257,7 +257,7 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         });
 
         // move Y dynamically
-        y += dynamicHeight + 5;
+        y += dynamicHeight + 2.5;
     }
     const pageCount = pdf.getNumberOfPages();
 
