@@ -10,7 +10,8 @@ export default function ProductTable({
   handleImage,
   lastQRRef,
   lastBarcodeRef,
-  totals
+  totals,
+  setSelectedImage
 }: any) {
   return (
     <table>
@@ -61,7 +62,12 @@ export default function ProductTable({
                 <img
                   src={row.previewUrl || row.imageUrl}
                   width="80"
-                  style={{ marginTop: "8px", borderRadius: "6px" }}
+                  style={{
+                    marginTop: "8px", borderRadius: "6px",
+                    cursor: "pointer",        // ✅ THIS IS KEY
+                    display: "block"          // (fix for some browsers)
+                  }}
+                  onClick={() => setSelectedImage(row.previewUrl || row.imageUrl)}
                 />
               ) : (
                 <div style={{ fontSize: "12px", color: "#888", marginTop: "6px" }}>

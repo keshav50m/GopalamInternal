@@ -14,6 +14,9 @@ export default function ProductPanel() {
   const lastBarcodeRef = useRef<HTMLInputElement>(null);
   const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
   const [companyName, setCompanyName] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     fetchSavedProducts();
@@ -249,6 +252,7 @@ export default function ProductPanel() {
         lastQRRef={lastQRRef}
         lastBarcodeRef={lastBarcodeRef}
         totals={totals}
+        setSelectedImage={setSelectedImage}
       />
       {/* 🔥 TOTAL ROW ALIGNED WITH TABLE */}
 
@@ -292,6 +296,8 @@ export default function ProductPanel() {
           }}
         >Download PDF</button>
         {showPopup && (
+
+
 
           <div style={{
             position: "fixed",
@@ -347,12 +353,58 @@ export default function ProductPanel() {
                 </label>
               ))}
 
+              {isGenerating && (
+                <div style={{ marginBottom: "15px" }}>
+                  <div style={{
+                    width: "100%",
+                    height: "10px",
+                    background: "#e5e7eb",
+                    borderRadius: "5px",
+                    overflow: "hidden"
+                  }}>
+                    <div style={{
+                      width: `${progress}%`,
+                      height: "100%",
+                      background: "#3b82f6",
+                      transition: "width 0.3s ease"
+                    }} />
+                  </div>
+
+                  <p style={{ fontSize: "12px", marginTop: "5px" }}>
+                    Generating PDF... {progress}%
+                  </p>
+                </div>
+              )}
+
               <div style={{ marginTop: "15px" }}>
                 <button
+                  disabled={isGenerating}
+                  style={{
+                    opacity: isGenerating ? 0.6 : 1,
+                    cursor: isGenerating ? "not-allowed" : "pointer"
+                  }}
                   onClick={async () => {
+                    setIsGenerating(true);
+                    setProgress(10);
+
                     const { generatePDF } = await import("@/utils/generatePDF");
-                    generatePDF(rows, selectedFields, companyName);
-                    setShowPopup(false);
+
+                    // Fake smooth progress
+                    let fakeProgress = 10;
+                    const interval = setInterval(() => {
+                      fakeProgress += 10;
+                      if (fakeProgress < 90) setProgress(fakeProgress);
+                    }, 300);
+
+                    await generatePDF(rows, selectedFields, companyName);
+                    clearInterval(interval);
+                    setProgress(100);
+
+                    setTimeout(() => {
+                      setIsGenerating(false);
+                      setShowPopup(false);
+                      setProgress(0);
+                    }, 500);
                   }}
                 >
                   Generate PDF
@@ -384,6 +436,35 @@ export default function ProductPanel() {
           + Add Product
         </button>
       </div>
+
+      {selectedImage && (
+        <div
+          onClick={() => setSelectedImage(null)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0,0,0,0.8)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 2000
+          }}
+        >
+          <img
+            src={selectedImage}
+            alt="zoom"
+            style={{
+              maxWidth: "90%",
+              maxHeight: "90%",
+              borderRadius: "10px",
+              boxShadow: "0 0 20px black"
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
