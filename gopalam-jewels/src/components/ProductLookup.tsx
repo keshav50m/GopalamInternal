@@ -5,16 +5,23 @@ import ProductTable from "@/components/productTable";
 import ExcelUpload from "@/components/ExcelUpload";
 import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
 
+const defaultEmptyRow = {
+  qrCode: "",
+  barcode: "",
+  imageUrl: "",
+  previewUrl: "",
+  data: null,
+};
+
 export default function ProductPanel() {
-  const [rows, setRows] = useState<any[]>([
-    { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null },
-  ]);
+  const [rows, setRows] = useState<any[]>([defaultEmptyRow]);
 
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
   const lastQRRef = useRef<HTMLInputElement>(null);
   const lastBarcodeRef = useRef<HTMLInputElement>(null);
   const previousRowsLengthRef = useRef(rows.length);
   const hasLoadedScannerRowsRef = useRef(false);
+  const skipNextScannerRowsSaveRef = useRef(false);
   const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
   const [companyName, setCompanyName] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -25,6 +32,18 @@ export default function ProductPanel() {
 
   useEffect(() => {
     fetchSavedProducts();
+  }, []);
+
+  useEffect(() => {
+    const clearScannerRowsOnRefresh = () => {
+      sessionStorage.removeItem("scannerRows");
+    };
+
+    window.addEventListener("beforeunload", clearScannerRowsOnRefresh);
+
+    return () => {
+      window.removeEventListener("beforeunload", clearScannerRowsOnRefresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -48,6 +67,11 @@ export default function ProductPanel() {
 
   useEffect(() => {
     if (!hasLoadedScannerRowsRef.current) return;
+
+    if (skipNextScannerRowsSaveRef.current) {
+      skipNextScannerRowsSaveRef.current = false;
+      return;
+    }
 
     sessionStorage.setItem("scannerRows", JSON.stringify(rows));
   }, [rows]);
@@ -118,7 +142,7 @@ export default function ProductPanel() {
       setTimeout(() => {
         setRows((prevRows) => {
           if (prevRows.length === index + 1) {
-            return [...prevRows, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }];
+            return [...prevRows, defaultEmptyRow];
           }
           return prevRows;
         });
@@ -176,7 +200,7 @@ export default function ProductPanel() {
           if (prevRows.length === index + 1) {
             return [
               ...prevRows,
-              { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }
+              defaultEmptyRow
             ];
           }
           return prevRows;
@@ -352,6 +376,17 @@ export default function ProductPanel() {
         !visibleIndexes.has(index) || remainingVisibleIndexes.has(index)
       )
     );
+  };
+
+  const removeAllProducts = () => {
+    const confirmed = window.confirm("Are you sure you want to remove all products?");
+
+    if (!confirmed) return;
+
+    skipNextScannerRowsSaveRef.current = true;
+    sessionStorage.removeItem("scannerRows");
+    setImageFilter("all");
+    setRows([defaultEmptyRow]);
   };
 
   const imageFilterButtons = [
@@ -618,7 +653,7 @@ export default function ProductPanel() {
         {/* New Manual Add Row Button */}
         <button
           onClick={() => {
-            setRows(prev => [...prev, { qrCode: "", barcode: "", imageUrl: "", previewUrl: "", data: null }]);
+            setRows(prev => [...prev, defaultEmptyRow]);
           }}
           style={{
             backgroundColor: "#64748b",
@@ -634,6 +669,30 @@ export default function ProductPanel() {
           }}
         >
           + Add Product
+        </button>
+      </div>
+
+      <div style={{
+        marginTop: "12px",
+        display: "flex",
+        alignItems: "center"
+      }}>
+        <button
+          onClick={removeAllProducts}
+          style={{
+            backgroundColor: "#dc2626",
+            color: "white",
+            padding: "10px 14px",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "14px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            minHeight: "42px",
+            whiteSpace: "nowrap"
+          }}
+        >
+          Remove All Products
         </button>
       </div>
 
