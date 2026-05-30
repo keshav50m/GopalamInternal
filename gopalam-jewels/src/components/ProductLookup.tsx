@@ -18,6 +18,8 @@ export default function ProductPanel() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [imageFilter, setImageFilter] =
+    useState<"all" | "present" | "missing">("all");
 
   useEffect(() => {
     fetchSavedProducts();
@@ -224,8 +226,8 @@ export default function ProductPanel() {
     }
   };
 
-  const saveAll = async () => {
-    const toSave = rows.filter(r => r.barcode && r.data).map(r => ({
+  const saveAll = async (rowsToSave: any[] = rows) => {
+    const toSave = rowsToSave.filter(r => r.barcode && r.data).map(r => ({
       barcode: r.barcode,
       image: r.imageUrl || "",
       data: r.data,
@@ -263,7 +265,63 @@ export default function ProductPanel() {
   });
 
   const [showPopup, setShowPopup] = useState(false);
-  const totals = calculateTotals(rows);
+  const allProductsCount = rows.length;
+  const imagesPresentCount = rows.filter((row) => row.imageUrl).length;
+  const imagesMissingCount = rows.filter((row) => !row.imageUrl).length;
+
+  const filteredRows = rows
+    .map((row, originalIndex) => ({ ...row, __originalIndex: originalIndex }))
+    .filter((row) => {
+      if (imageFilter === "present") return row.imageUrl;
+      if (imageFilter === "missing") return !row.imageUrl;
+      return true;
+    });
+
+  const getOriginalRowIndex = (displayIndex: number) =>
+    filteredRows[displayIndex]?.__originalIndex ?? displayIndex;
+
+  const stripDisplayMetadata = (row: any) => {
+    const { __originalIndex, ...cleanRow } = row;
+    return cleanRow;
+  };
+
+  const handleDisplayedRowsChange = (nextRows: any[] | ((prevRows: any[]) => any[])) => {
+    if (typeof nextRows === "function") {
+      setRows((prevRows) => nextRows(prevRows).map(stripDisplayMetadata));
+      return;
+    }
+
+    if (imageFilter === "all") {
+      setRows(nextRows.map(stripDisplayMetadata));
+      return;
+    }
+
+    const visibleIndexes = new Set(
+      filteredRows
+        .map((row) => row.__originalIndex)
+        .filter((index) => typeof index === "number")
+    );
+
+    const remainingVisibleIndexes = new Set(
+      nextRows
+        .map((row) => row.__originalIndex)
+        .filter((index) => typeof index === "number")
+    );
+
+    setRows((prevRows) =>
+      prevRows.filter((_, index) =>
+        !visibleIndexes.has(index) || remainingVisibleIndexes.has(index)
+      )
+    );
+  };
+
+  const imageFilterButtons = [
+    { key: "all", label: `All Products (${allProductsCount})` },
+    { key: "present", label: `Images Present (${imagesPresentCount})` },
+    { key: "missing", label: `Images Missing (${imagesMissingCount})` },
+  ] as const;
+
+  const totals = calculateTotals(filteredRows);
   return (
     <div>
       <div style={{
@@ -310,11 +368,11 @@ export default function ProductPanel() {
       </div>
 
       <ProductTable
-        rows={rows}
-        setRows={setRows}
-        handleQRScan={handleQRScan}
-        handleManualBarcode={handleManualBarcode}
-        handleImage={handleImage}
+        rows={filteredRows}
+        setRows={handleDisplayedRowsChange}
+        handleQRScan={(index: number, value: string) => handleQRScan(getOriginalRowIndex(index), value)}
+        handleManualBarcode={(index: number, value: string) => handleManualBarcode(getOriginalRowIndex(index), value)}
+        handleImage={(index: number, file: File) => handleImage(getOriginalRowIndex(index), file)}
         lastQRRef={lastQRRef}
         lastBarcodeRef={lastBarcodeRef}
         totals={totals}
@@ -335,16 +393,49 @@ export default function ProductPanel() {
       }}>
         <strong>Total Products: {totals.count}</strong>
       </div>
-      <div style={{ marginTop: "20px", display: "flex", gap: "12px" }}>
-        <button onClick={saveAll} style={{
+
+      <div style={{
+        marginTop: "20px",
+        display: "flex",
+        gap: "12px",
+        flexWrap: "wrap",
+        alignItems: "center"
+      }}>
+        {imageFilterButtons.map((button) => {
+          const isActive = imageFilter === button.key;
+
+          return (
+            <button
+              key={button.key}
+              onClick={() => setImageFilter(button.key)}
+              style={{
+                backgroundColor: isActive ? "#3b82f6" : "#64748b",
+                color: "white",
+                padding: "10px 14px",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                minHeight: "42px",
+                whiteSpace: "nowrap"
+              }}
+            >
+              {button.label}
+            </button>
+          );
+        })}
+        <button onClick={() => saveAll(filteredRows.map(stripDisplayMetadata))} style={{
           backgroundColor: "#28a745",
           color: "white",
-          padding: "12px 24px",
+          padding: "10px 14px",
           border: "none",
           borderRadius: "6px",
-          fontSize: "16px",
+          fontSize: "14px",
           fontWeight: "bold",
-          cursor: "pointer"
+          cursor: "pointer",
+          minHeight: "42px",
+          whiteSpace: "nowrap"
         }}>
           💾 Save All Products
         </button>
@@ -353,12 +444,14 @@ export default function ProductPanel() {
           style={{
             backgroundColor: "#3b82f6",
             color: "white",
-            padding: "12px 24px",
+            padding: "10px 14px",
             border: "none",
             borderRadius: "6px",
-            fontSize: "16px",
+            fontSize: "14px",
             fontWeight: "bold",
-            cursor: "pointer"
+            cursor: "pointer",
+            minHeight: "42px",
+            whiteSpace: "nowrap"
           }}
         >Download PDF</button>
         {showPopup && (
@@ -462,7 +555,7 @@ export default function ProductPanel() {
                       if (fakeProgress < 90) setProgress(fakeProgress);
                     }, 300);
 
-                    await generatePDF(rows, selectedFields, companyName);
+                    await generatePDF(filteredRows.map(stripDisplayMetadata), selectedFields, companyName);
                     clearInterval(interval);
                     setProgress(100);
 
@@ -491,17 +584,71 @@ export default function ProductPanel() {
           style={{
             backgroundColor: "#64748b",
             color: "white",
-            padding: "12px 20px",
+            padding: "10px 14px",
             border: "none",
             borderRadius: "6px",
-            fontSize: "16px",
+            fontSize: "14px",
             fontWeight: "bold",
-            cursor: "pointer"
+            cursor: "pointer",
+            minHeight: "42px",
+            whiteSpace: "nowrap"
           }}
         >
           + Add Product
         </button>
       </div>
+
+      <button
+        onClick={() => {
+          window.scrollTo({
+            top: 0,
+            behavior: "smooth"
+          });
+        }}
+        style={{
+          position: "fixed",
+          right: "24px",
+          bottom: "78px",
+          zIndex: 900,
+          backgroundColor: "#111827",
+          color: "white",
+          padding: "12px 16px",
+          border: "none",
+          borderRadius: "999px",
+          fontSize: "14px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.25)"
+        }}
+      >
+        ↑ Top
+      </button>
+
+      <button
+        onClick={() => {
+          window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: "smooth"
+          });
+        }}
+        style={{
+          position: "fixed",
+          right: "24px",
+          bottom: "24px",
+          zIndex: 900,
+          backgroundColor: "#111827",
+          color: "white",
+          padding: "12px 16px",
+          border: "none",
+          borderRadius: "999px",
+          fontSize: "14px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.25)"
+        }}
+      >
+        ↓ Bottom
+      </button>
 
       {selectedImage && (
         <div
