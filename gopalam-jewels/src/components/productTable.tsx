@@ -101,7 +101,9 @@ export default function ProductTable({
             <td>{row.data?.ITEMNO}</td>
             <td>{row.data?.["STONE NAME"]}</td>
             <td>{row.data?.["GROSS WT"]}</td>
-            <td>{row.data?.["STONE WT"]}</td>
+            <td>{row.data?.["STONE WT"]
+              ? parseFloat(row.data["STONE WT"]).toFixed(2)
+              : ""}</td>
 
             {/* ✅ DAI FIX */}
             <td>

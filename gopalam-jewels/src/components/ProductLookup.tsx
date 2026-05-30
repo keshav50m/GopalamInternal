@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { calculateTotals } from "@/utils/calculateTotals";
 import ProductTable from "@/components/productTable";
 import ExcelUpload from "@/components/ExcelUpload";
+import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
 
 export default function ProductPanel() {
   const [rows, setRows] = useState<any[]>([
@@ -161,10 +162,51 @@ export default function ProductPanel() {
     uploadToCloudinary(file, index);
   };
 
+  const compressImage = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        ctx?.drawImage(img, 0, 0);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+
+            const compressedFile = new File(
+              [blob],
+              file.name,
+              {
+                type: "image/jpeg",
+                lastModified: Date.now(),
+              }
+            );
+
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          0.6 // compression quality
+        );
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const uploadToCloudinary = async (file: File, index: number) => {
     try {
+      const compressedFile = await compressImage(file);
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", compressedFile);
       formData.append("upload_preset", "gopalam_jewels");
 
       const res = await fetch(
@@ -237,9 +279,33 @@ export default function ProductPanel() {
           </p>
         </div>
 
-        <div>
+        {/* <div>
           <h3>Excel Upload</h3>
           <ExcelUpload setRows={setRows} savedProducts={savedProducts} />
+        </div> */}
+
+        <div
+          style={{
+            display: "flex",
+            gap: "20px",
+            alignItems: "flex-start",
+          }}
+        >
+          <div>
+            <h3>Barcode Excel</h3>
+            <ExcelUpload
+              setRows={setRows}
+              savedProducts={savedProducts}
+            />
+          </div>
+
+          <div>
+            <h3>QR Excel</h3>
+            <QRCodeExcelUpload
+              setRows={setRows}
+              savedProducts={savedProducts}
+            />
+          </div>
         </div>
       </div>
 
