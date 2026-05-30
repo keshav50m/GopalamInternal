@@ -13,6 +13,8 @@ export default function ProductPanel() {
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
   const lastQRRef = useRef<HTMLInputElement>(null);
   const lastBarcodeRef = useRef<HTMLInputElement>(null);
+  const previousRowsLengthRef = useRef(rows.length);
+  const hasLoadedScannerRowsRef = useRef(false);
   const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
   const [companyName, setCompanyName] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -24,6 +26,31 @@ export default function ProductPanel() {
   useEffect(() => {
     fetchSavedProducts();
   }, []);
+
+  useEffect(() => {
+    try {
+      const storedRows = sessionStorage.getItem("scannerRows");
+
+      if (storedRows) {
+        const parsedRows = JSON.parse(storedRows);
+
+        if (Array.isArray(parsedRows) && parsedRows.length > 0) {
+          setRows(parsedRows);
+          previousRowsLengthRef.current = parsedRows.length;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      hasLoadedScannerRowsRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedScannerRowsRef.current) return;
+
+    sessionStorage.setItem("scannerRows", JSON.stringify(rows));
+  }, [rows]);
 
   const fetchSavedProducts = async () => {
     try {
@@ -103,16 +130,23 @@ export default function ProductPanel() {
 
   // Auto focus on newest row
   useEffect(() => {
+    const previousRowsLength = previousRowsLengthRef.current;
+    previousRowsLengthRef.current = rows.length;
+
+    if (rows.length <= previousRowsLength) return;
+
     if (rows.length > 0) {
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         if (focusField === "qr") {
-          lastQRRef.current?.focus();
+          lastQRRef.current?.focus({ preventScroll: true });
         } else {
-          lastBarcodeRef.current?.focus();
+          lastBarcodeRef.current?.focus({ preventScroll: true });
         }
       }, 1000);
+
+      return () => clearTimeout(timeout);
     }
-  }, [rows.length]);
+  }, [rows.length, focusField]);
 
   // Adding this for barcode manual input in case QR code is not scanning properly. This allows users to type or paste the barcode and it will fetch data from saved products if available. 
   const handleManualBarcode = (index: number, value: string) => {
@@ -265,13 +299,18 @@ export default function ProductPanel() {
   });
 
   const [showPopup, setShowPopup] = useState(false);
-  const allProductsCount = rows.length;
-  const imagesPresentCount = rows.filter((row) => row.imageUrl).length;
-  const imagesMissingCount = rows.filter((row) => !row.imageUrl).length;
+  const isValidProductRow = (row: any) =>
+    Boolean(row.barcode || row.qrCode || row.data);
+
+  const validProductRows = rows.filter(isValidProductRow);
+  const allProductsCount = validProductRows.length;
+  const imagesPresentCount = validProductRows.filter((row) => row.imageUrl).length;
+  const imagesMissingCount = validProductRows.filter((row) => !row.imageUrl).length;
 
   const filteredRows = rows
     .map((row, originalIndex) => ({ ...row, __originalIndex: originalIndex }))
     .filter((row) => {
+      if (!isValidProductRow(row)) return true;
       if (imageFilter === "present") return row.imageUrl;
       if (imageFilter === "missing") return !row.imageUrl;
       return true;
