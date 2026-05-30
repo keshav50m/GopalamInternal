@@ -5,16 +5,16 @@ import ProductTable from "@/components/productTable";
 import ExcelUpload from "@/components/ExcelUpload";
 import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
 
-const defaultEmptyRow = {
+const createEmptyRow = () => ({
   qrCode: "",
   barcode: "",
   imageUrl: "",
   previewUrl: "",
   data: null,
-};
+});
 
 export default function ProductPanel() {
-  const [rows, setRows] = useState<any[]>([defaultEmptyRow]);
+  const [rows, setRows] = useState<any[]>([createEmptyRow()]);
 
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
   const lastQRRef = useRef<HTMLInputElement>(null);
@@ -142,7 +142,7 @@ export default function ProductPanel() {
       setTimeout(() => {
         setRows((prevRows) => {
           if (prevRows.length === index + 1) {
-            return [...prevRows, defaultEmptyRow];
+            return [...prevRows, createEmptyRow()];
           }
           return prevRows;
         });
@@ -200,7 +200,7 @@ export default function ProductPanel() {
           if (prevRows.length === index + 1) {
             return [
               ...prevRows,
-              defaultEmptyRow
+              createEmptyRow()
             ];
           }
           return prevRows;
@@ -386,7 +386,7 @@ export default function ProductPanel() {
     skipNextScannerRowsSaveRef.current = true;
     sessionStorage.removeItem("scannerRows");
     setImageFilter("all");
-    setRows([defaultEmptyRow]);
+    setRows([createEmptyRow()]);
   };
 
   const imageFilterButtons = [
@@ -653,7 +653,7 @@ export default function ProductPanel() {
         {/* New Manual Add Row Button */}
         <button
           onClick={() => {
-            setRows(prev => [...prev, defaultEmptyRow]);
+            setRows(prev => [...prev, createEmptyRow()]);
           }}
           style={{
             backgroundColor: "#64748b",
