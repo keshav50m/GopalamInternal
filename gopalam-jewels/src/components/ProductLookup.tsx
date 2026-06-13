@@ -118,13 +118,14 @@ export default function ProductPanel() {
 
     if (match) {
       // ✅ Load saved data + image
+      const matchedImage = match.imageCatalogueImage || match.image || "";
       updated[index].barcode = match.barcode;
       updated[index].data = match.data;
-      updated[index].imageUrl = match.image || "";
+      updated[index].imageUrl = matchedImage;
 
       // Show image in preview
-      if (match.image) {
-        updated[index].previewUrl = match.image;
+      if (matchedImage) {
+        updated[index].previewUrl = matchedImage;
       }
     } else if (parts.length >= 6) {   // Increased threshold for safety
       const parsed = parseQRCode(value);
@@ -181,10 +182,11 @@ export default function ProductPanel() {
     const match = savedProducts.find(p => String(p.barcode).trim() === value.trim());
 
     if (match) {
+      const matchedImage = match.imageCatalogueImage || match.image || "";
       updated[index].data = match.data;
-      updated[index].imageUrl = match.image || "";
-      if (match.image) {
-        updated[index].previewUrl = match.image;
+      updated[index].imageUrl = matchedImage;
+      if (matchedImage) {
+        updated[index].previewUrl = matchedImage;
       }
     } else {
       updated[index].data = null;
@@ -285,6 +287,14 @@ export default function ProductPanel() {
   };
 
   const saveAll = async (rowsToSave: any[] = rows) => {
+
+    console.log(
+      rows.map(r => ({
+        barcode: r.barcode,
+        imageUrl: r.imageUrl
+      }))
+    );
+    
     const toSave = rowsToSave.filter(r => r.barcode && r.data).map(r => ({
       barcode: r.barcode,
       image: r.imageUrl || "",

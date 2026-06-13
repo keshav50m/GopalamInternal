@@ -5,9 +5,37 @@ export async function GET() {
   try {
     const client = await clientPromise;
     const db = client.db("gopalamJewels");
-    
+
     const savedProducts = await db.collection("savedProducts").find({}).toArray();
-    return NextResponse.json(savedProducts);
+
+    const itemNos = Array.from(
+      new Set(
+        savedProducts
+          .map((product: any) => String(product.data?.ITEMNO || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    const imageCatalogueItems = itemNos.length
+      ? await db.collection("imageCatalogue").find({ itemNo: { $in: itemNos } }).toArray()
+      : [];
+
+    const imageByItemNo = new Map(
+      imageCatalogueItems.map((item: any) => [
+        String(item.itemNo || "").trim(),
+        item.image || "",
+      ])
+    );
+
+    const productsWithCatalogueImages = savedProducts.map((product: any) => {
+      const itemNo = String(product.data?.ITEMNO || "").trim();
+      return {
+        ...product,
+        imageCatalogueImage: imageByItemNo.get(itemNo) || "",
+      };
+    });
+
+    return NextResponse.json(productsWithCatalogueImages);
   } catch (error: any) {
     console.error("GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -24,6 +52,7 @@ export async function POST(request: NextRequest) {
 
     const client = await clientPromise;
     const db = client.db("gopalamJewels");
+    const updatedAt = new Date();
 
     const bulkOps = products.map((item: any) => ({
       updateOne: {
@@ -33,7 +62,7 @@ export async function POST(request: NextRequest) {
             barcode: String(item.barcode).trim(),
             image: item.image || "",           // Cloudinary URL
             data: item.data || {},
-            updatedAt: new Date(),
+            updatedAt,
           },
         },
         upsert: true,
@@ -41,6 +70,30 @@ export async function POST(request: NextRequest) {
     }));
 
     await db.collection("savedProducts").bulkWrite(bulkOps);
+
+    const imageCatalogueOps = products
+      .map((item: any) => ({
+        itemNo: String(item.data?.ITEMNO || "").trim(),
+        image: String(item.image || "").trim(),
+      }))
+      .filter((item: any) => item.itemNo && item.image)
+      .map((item: any) => ({
+        updateOne: {
+          filter: { itemNo: item.itemNo },
+          update: {
+            $set: {
+              itemNo: item.itemNo,
+              image: item.image,
+              updatedAt,
+            },
+          },
+          upsert: true,
+        },
+      }));
+
+    if (imageCatalogueOps.length > 0) {
+      await db.collection("imageCatalogue").bulkWrite(imageCatalogueOps);
+    }
 
     return NextResponse.json({ 
       success: true, 

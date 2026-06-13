@@ -43,6 +43,36 @@ export default function Page() {
             >
               Dashboard
             </Link>
+            <Link
+              href="/image-catalogue"
+              style={{
+                color: "#43391f",
+                background: "#ffffff",
+                border: "1px solid #d8c89f",
+                borderRadius: "6px",
+                padding: "9px 14px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: 700,
+              }}
+            >
+              Image Catalogue
+            </Link>
+            <Link
+              href="/custom-search"
+              style={{
+                color: "#43391f",
+                background: "#ffffff",
+                border: "1px solid #d8c89f",
+                borderRadius: "6px",
+                padding: "9px 14px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: 700,
+              }}
+            >
+              Custom Search
+            </Link>
           </nav>
         </div>
       </div>

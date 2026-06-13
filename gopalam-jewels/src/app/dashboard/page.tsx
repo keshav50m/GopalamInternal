@@ -69,6 +69,12 @@ export default function DashboardPage() {
             <Link className={styles.activeNavLink} href="/dashboard">
               Dashboard
             </Link>
+            <Link className={styles.navLink} href="/image-catalogue">
+              Image Catalogue
+            </Link>
+            <Link className={styles.navLink} href="/custom-search">
+              Custom Search
+            </Link>
           </nav>
         </div>
       </header>
