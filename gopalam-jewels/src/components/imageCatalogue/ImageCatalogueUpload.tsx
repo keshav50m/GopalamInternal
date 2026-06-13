@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, ChangeEvent } from "react";
 import styles from "./ImageCatalogue.module.css";
 import { uploadImageToCloudinary } from "./imageUpload";
 
@@ -88,6 +88,63 @@ export default function ImageCatalogueUpload() {
     updateRow(id, { file, previewUrl });
   };
 
+  const handleExcelUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    try {
+      setError("");
+      setMessage("");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(
+        "/api/image-catalogue/excel",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Excel upload failed"
+        );
+      }
+
+      const newRows = data.rows.map(
+        (row: any) => ({
+          id: `${Date.now()}-${Math.random()}`,
+          file: null,
+          itemNo: row.itemNo,
+          previewUrl: row.image || "",
+        })
+      );
+
+      setRows(
+        newRows.length
+          ? [...newRows, createEmptyRow()]
+          : [createEmptyRow()]
+      );
+
+      setMessage(
+        `${newRows.length} unique Item Nos loaded`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Excel upload failed"
+      );
+    }
+  };
+
   const handleAddRow = () => {
     setRows((prevRows) => [...prevRows, createEmptyRow()]);
     setMessage("");
@@ -140,6 +197,39 @@ export default function ImageCatalogueUpload() {
 
   return (
     <div className={styles.card}>
+      {/* <div style={{ marginBottom: "20px" }}>
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={handleExcelUpload}
+          disabled={isUploading}
+        />
+      </div> */}
+      <div
+        style={{
+          marginBottom: "24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+        }}
+      >
+        <label
+          style={{
+            fontSize: "18px",
+            fontWeight: 700,
+            color: "#43391f",
+          }}
+        >
+          Barcode Excel Upload
+        </label>
+
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={handleExcelUpload}
+          disabled={isUploading}
+        />
+      </div>
       <div className={styles.tableWrap}>
         <table className={styles.catalogueTable}>
           <thead>

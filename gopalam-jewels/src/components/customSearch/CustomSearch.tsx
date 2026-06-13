@@ -187,7 +187,7 @@ export default function CustomSearch() {
       JSON.stringify([...existingRows, ...newRows, createEmptyScannerRow()])
     );
     // router.push("/");
-    window.location.href = "/";
+    window.location.href = "/scanner";
   };
 
   const selectedProducts = products.filter((product) =>
