@@ -1,11 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 
-export async function GET() {
+
+export async function GET(request: NextRequest) {
   try {
     const client = await clientPromise;
     const db = client.db("gopalamJewels");
+    const { searchParams } = request.nextUrl;
+    const barcode = searchParams.get("barcode");
 
+    if (barcode) {
+      const product = await db.collection("savedProducts").findOne({
+        barcode: barcode.trim(),
+      });
+
+      if (!product) {
+        return NextResponse.json({
+          product: null,
+        });
+      }
+
+      const itemNo = String(
+        product.data?.ITEMNO || ""
+      ).trim();
+
+      const catalogueItem = await db
+        .collection("imageCatalogue")
+        .findOne({
+          itemNo,
+        });
+
+      return NextResponse.json({
+        product: {
+          ...product,
+          imageCatalogueImage:
+            catalogueItem?.image || "",
+        },
+      });
+    }
+    
     const savedProducts = await db.collection("savedProducts").find({}).toArray();
 
     const itemNos = Array.from(
@@ -95,9 +128,9 @@ export async function POST(request: NextRequest) {
       await db.collection("imageCatalogue").bulkWrite(imageCatalogueOps);
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: `${products.length} products saved successfully` 
+    return NextResponse.json({
+      success: true,
+      message: `${products.length} products saved successfully`
     });
 
   } catch (error: any) {

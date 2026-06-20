@@ -77,13 +77,19 @@ export async function POST(req: NextRequest) {
             )
         );
 
-        const result =
-            uniqueItemNos.map(itemNo => ({
+        const result = uniqueItemNos.map(itemNo => {
+            const firstProduct = products.find(
+                (p: any) =>
+                    String(p.data?.ITEMNO || "").trim() === itemNo
+            );
+
+            return {
+                barcode: firstProduct?.barcode || "",
                 itemNo,
-                image:
-                    imageMap.get(itemNo) || ""
-            }));
-            
+                image: imageMap.get(itemNo) || "",
+            };
+        });
+
         return NextResponse.json({
             rows: result
         });

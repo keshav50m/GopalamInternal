@@ -58,8 +58,15 @@ export default function QRCodeExcelUpload({
                 qrCode: qrString,
                 barcode,
                 data: parsed,
-                imageUrl: match?.image || "",
-                previewUrl: match?.image || "",
+                imageUrl:
+                    match?.imageCatalogueImage ||
+                    match?.image ||
+                    "",
+
+                previewUrl:
+                    match?.imageCatalogueImage ||
+                    match?.image ||
+                    "",
             };
         });
 

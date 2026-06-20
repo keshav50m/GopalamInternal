@@ -44,12 +44,19 @@ export default function ExcelUpload({ setRows, savedProducts }: any) {
                 const match = savedProducts.find(
                     (p: any) => String(p.barcode).trim() === code
                 );
-
+                console.log("MATCH", match);
                 return {
                     qrCode: "",
                     barcode: code,
-                    imageUrl: match?.image || "",
-                    previewUrl: match?.image || "",
+                    imageUrl:
+                        match?.imageCatalogueImage ||
+                        match?.image ||
+                        "",
+
+                    previewUrl:
+                        match?.imageCatalogueImage ||
+                        match?.image ||
+                        "",
                     data: match?.data || null,
                 };
             });

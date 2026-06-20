@@ -7,6 +7,7 @@ import { uploadImageToCloudinary } from "./imageUpload";
 type CatalogueUploadRow = {
   id: string;
   file: File | null;
+  barcode: string;
   itemNo: string;
   previewUrl: string;
 };
@@ -14,6 +15,7 @@ type CatalogueUploadRow = {
 const createEmptyRow = (): CatalogueUploadRow => ({
   id: `${Date.now()}-${Math.random()}`,
   file: null,
+  barcode: "",
   itemNo: "",
   previewUrl: "",
 });
@@ -83,6 +85,77 @@ export default function ImageCatalogueUpload() {
     }
   };
 
+  const fetchProductByBarcode = async (
+    id: string,
+    barcode: string
+  ) => {
+    if (!barcode.trim()) return;
+
+    try {
+      const res = await fetch(
+        `/api/saved-products?barcode=${encodeURIComponent(
+          barcode.trim()
+        )}`
+      );
+
+      const data = await res.json();
+
+      setRows((prevRows) => {
+        const updatedRows = prevRows.map((row) => {
+          if (row.id !== id) return row;
+
+          return {
+            ...row,
+            barcode: barcode.trim(),
+
+            // if product found -> auto populate
+            itemNo:
+              data?.product?.data?.ITEMNO ||
+              row.itemNo,
+
+            previewUrl:
+              data?.product?.imageCatalogueImage ||
+              data?.product?.image ||
+              row.previewUrl,
+          };
+        });
+
+        // ALWAYS add new row if current row is last row
+        const isLastRow =
+          updatedRows[updatedRows.length - 1]?.id === id;
+
+        if (isLastRow) {
+          updatedRows.push(createEmptyRow());
+        }
+
+        return updatedRows;
+      });
+    } catch (error) {
+      console.error(error);
+
+      // Even if API fails, still add row
+      setRows((prevRows) => {
+        const updatedRows = prevRows.map((row) =>
+          row.id === id
+            ? {
+              ...row,
+              barcode: barcode.trim(),
+            }
+            : row
+        );
+
+        const isLastRow =
+          updatedRows[updatedRows.length - 1]?.id === id;
+
+        if (isLastRow) {
+          updatedRows.push(createEmptyRow());
+        }
+
+        return updatedRows;
+      });
+    }
+  };
+
   const handleFileChange = (id: string, file: File | null) => {
     const previewUrl = file ? URL.createObjectURL(file) : "";
     updateRow(id, { file, previewUrl });
@@ -122,6 +195,7 @@ export default function ImageCatalogueUpload() {
         (row: any) => ({
           id: `${Date.now()}-${Math.random()}`,
           file: null,
+          barcode: row.barcode || "",
           itemNo: row.itemNo,
           previewUrl: row.image || "",
         })
@@ -170,7 +244,11 @@ export default function ImageCatalogueUpload() {
     setMessage("");
     setError("");
 
-    const invalidRowIndex = rows.findIndex((row) => !row.file || !row.itemNo.trim());
+    const invalidRowIndex = rows.findIndex(
+      (row) =>
+        (!row.file && !row.previewUrl) ||
+        !row.itemNo.trim()
+    );
 
     if (invalidRowIndex !== -1) {
       setError(`Row ${invalidRowIndex + 1}: image and Item No are required.`);
@@ -180,14 +258,24 @@ export default function ImageCatalogueUpload() {
     try {
       setIsUploading(true);
 
-      for (const row of rows) {
-        if (!row.file) continue;
+      const validRows = rows.filter(
+        (row) => row.itemNo.trim()
+      );
 
-        const imageUrl = await uploadImageToCloudinary(row.file);
-        await saveImageCatalogueItem(row.itemNo.trim(), imageUrl);
+      for (const row of validRows) {
+        let imageUrl = row.previewUrl;
+
+        if (row.file) {
+          imageUrl = await uploadImageToCloudinary(row.file);
+        }
+
+        await saveImageCatalogueItem(
+          row.itemNo.trim(),
+          imageUrl
+        );
       }
 
-      setMessage(`${rows.length} image${rows.length === 1 ? "" : "s"} uploaded successfully.`);
+      setMessage(`${validRows.length} image${validRows.length === 1 ? "" : "s"} uploaded successfully.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -235,6 +323,7 @@ export default function ImageCatalogueUpload() {
           <thead>
             <tr>
               <th>Image</th>
+              <th>Barcode</th>
               <th>Item No</th>
               <th>Action</th>
             </tr>
@@ -269,6 +358,25 @@ export default function ImageCatalogueUpload() {
                       <span className={styles.noPreview}>No image selected</span>
                     )}
                   </div>
+                </td>
+                <td>
+                  <input
+                    className={styles.textInput}
+                    type="text"
+                    value={row.barcode || ""}
+                    placeholder="Scan Barcode"
+                    onChange={(e) =>
+                      updateRow(row.id, {
+                        barcode: e.target.value,
+                      })
+                    }
+                    onBlur={() =>
+                      fetchProductByBarcode(
+                        row.id,
+                        row.barcode || ""
+                      )
+                    }
+                  />
                 </td>
                 <td>
                   {/* <input
