@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent } from "react";
+import { useState, ChangeEvent, useRef } from "react";
 import styles from "./ImageCatalogue.module.css";
 import { uploadImageToCloudinary } from "./imageUpload";
 
@@ -25,6 +25,7 @@ export default function ImageCatalogueUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const barcodeRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const saveImageCatalogueItem = async (itemNo: string, image: string) => {
     const res = await fetch("/api/image-catalogue", {
@@ -90,6 +91,22 @@ export default function ImageCatalogueUpload() {
     barcode: string
   ) => {
     if (!barcode.trim()) return;
+    // ADD NEW ROW IMMEDIATELY
+    setRows(prevRows => {
+      const isLastRow =
+        prevRows[prevRows.length - 1]?.id === id;
+
+      if (!isLastRow) return prevRows;
+
+      const newRow = createEmptyRow();
+
+      setTimeout(() => {
+        barcodeRefs.current[newRow.id]?.focus();
+      }, 100);
+
+      return [...prevRows, newRow];
+    });
+
 
     try {
       const res = await fetch(
@@ -120,14 +137,6 @@ export default function ImageCatalogueUpload() {
           };
         });
 
-        // ALWAYS add new row if current row is last row
-        const isLastRow =
-          updatedRows[updatedRows.length - 1]?.id === id;
-
-        if (isLastRow) {
-          updatedRows.push(createEmptyRow());
-        }
-
         return updatedRows;
       });
     } catch (error) {
@@ -143,13 +152,6 @@ export default function ImageCatalogueUpload() {
             }
             : row
         );
-
-        const isLastRow =
-          updatedRows[updatedRows.length - 1]?.id === id;
-
-        if (isLastRow) {
-          updatedRows.push(createEmptyRow());
-        }
 
         return updatedRows;
       });
@@ -361,6 +363,9 @@ export default function ImageCatalogueUpload() {
                 </td>
                 <td>
                   <input
+                    ref={(el) => {
+                      barcodeRefs.current[row.id] = el;
+                    }}
                     className={styles.textInput}
                     type="text"
                     value={row.barcode || ""}
@@ -370,12 +375,14 @@ export default function ImageCatalogueUpload() {
                         barcode: e.target.value,
                       })
                     }
-                    onBlur={() =>
-                      fetchProductByBarcode(
-                        row.id,
-                        row.barcode || ""
-                      )
-                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        fetchProductByBarcode(
+                          row.id,
+                          row.barcode || ""
+                        );
+                      }
+                    }}
                   />
                 </td>
                 <td>
