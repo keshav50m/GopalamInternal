@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import clientPromise from "@/lib/mongodb";
+import {
+    buildCatalogueImageMap,
+    buildProductsByItemNo,
+    normalizeItemNo,
+    resolveImageCatalogueExcelImage,
+} from "@/utils/resolveImageCatalogueExcelImage";
+
+const escapeRegex = (value: string) =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export async function POST(req: NextRequest) {
     try {
@@ -40,13 +49,14 @@ export async function POST(req: NextRequest) {
         const client = await clientPromise;
         const db = client.db("gopalamJewels");
 
-        const products = await db
+        const products = (await db
             .collection("savedProducts")
             .find({
                 barcode: { $in: barcodes }
             })
-            .toArray();
+            .toArray()) as any[];
 
+        const productsByItemNo = buildProductsByItemNo(products);
         const uniqueItemNos = [
             ...new Set(
                 products
@@ -55,38 +65,47 @@ export async function POST(req: NextRequest) {
                             p.data?.ITEMNO
                     )
                     .filter(Boolean)
+                    .map(normalizeItemNo)
             )
         ];
 
+        if (uniqueItemNos.length === 0) {
+            return NextResponse.json({
+                rows: []
+            });
+        }
+
         const catalogueImages =
-            await db
+            (await db
                 .collection("imageCatalogue")
                 .find({
-                    itemNo: {
-                        $in: uniqueItemNos
-                    }
+                    $or: uniqueItemNos.map((itemNo) => ({
+                        itemNo: {
+                            $regex: `^\\s*${escapeRegex(itemNo)}\\s*$`,
+                            $options: "i",
+                        },
+                    })),
                 })
-                .toArray();
+                .toArray()) as any[];
 
-        const imageMap = new Map(
-            catalogueImages.map(
-                (i: any) => [
-                    i.itemNo,
-                    i.image
-                ]
-            )
-        );
+        const imageMap = buildCatalogueImageMap(catalogueImages);
 
         const result = uniqueItemNos.map(itemNo => {
             const firstProduct = products.find(
                 (p: any) =>
-                    String(p.data?.ITEMNO || "").trim() === itemNo
+                    normalizeItemNo(p.data?.ITEMNO) === itemNo
             );
+            const displayItemNo = firstProduct?.data?.ITEMNO || itemNo;
 
             return {
                 barcode: firstProduct?.barcode || "",
-                itemNo,
-                image: imageMap.get(itemNo) || "",
+                itemNo: displayItemNo,
+                image: resolveImageCatalogueExcelImage({
+                    itemNo,
+                    selectedProduct: firstProduct,
+                    catalogueImageMap: imageMap,
+                    productsByItemNo,
+                }),
             };
         });
 

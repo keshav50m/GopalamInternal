@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import clientPromise from "@/lib/mongodb";
+import {
+  buildCatalogueImageMap,
+  buildProductsByItemNo,
+  normalizeBarcode,
+  normalizeItemNo,
+  resolveImageCatalogueExcelImage,
+} from "@/utils/resolveImageCatalogueExcelImage";
 
 type QRUploadRow = {
   barcode: string;
   itemNo: string;
 };
-
-const normalizeItemNo = (value: unknown) =>
-  String(value || "").trim().toUpperCase();
 
 const normalizeHeader = (value: unknown) =>
   String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -56,12 +60,15 @@ export async function POST(req: NextRequest) {
     });
 
     const dataRows = qrColumnIndex >= 0 ? rows.slice(1) : rows;
+    const parsedRows: QRUploadRow[] = [];
     const uniqueRowsByItemNo = new Map<string, QRUploadRow>();
 
     dataRows.forEach((row) => {
       const qrValue = qrColumnIndex >= 0 ? row[qrColumnIndex] : row[0];
       const parsedRow = parseQRValue(qrValue);
       if (!parsedRow) return;
+
+      parsedRows.push(parsedRow);
 
       const normalizedItemNo = normalizeItemNo(parsedRow.itemNo);
       if (!normalizedItemNo || uniqueRowsByItemNo.has(normalizedItemNo)) return;
@@ -81,8 +88,26 @@ export async function POST(req: NextRequest) {
     const client = await clientPromise;
     const db = client.db("gopalamJewels");
     const itemNos = uniqueRows.map((row) => row.itemNo);
+    const barcodes = parsedRows
+      .map((row) => normalizeBarcode(row.barcode))
+      .filter(Boolean);
 
-    const catalogueImages = await db
+    const products = (await db
+      .collection("savedProducts")
+      .find({
+        barcode: { $in: barcodes },
+      })
+      .toArray()) as any[];
+
+    const productMap = new Map(
+      products.map((product: any) => [
+        normalizeBarcode(product.barcode),
+        product,
+      ])
+    );
+    const productsByItemNo = buildProductsByItemNo(products);
+
+    const catalogueImages = (await db
       .collection("imageCatalogue")
       .find({
         $or: itemNos.map((itemNo) => ({
@@ -92,21 +117,25 @@ export async function POST(req: NextRequest) {
           },
         })),
       })
-      .toArray();
+      .toArray()) as any[];
 
-    const imageMap = new Map(
-      catalogueImages.map((item: any) => [
-        normalizeItemNo(item.itemNo),
-        item.image,
-      ])
-    );
+    const imageMap = buildCatalogueImageMap(catalogueImages);
 
     return NextResponse.json({
-      rows: uniqueRows.map((row) => ({
-        barcode: row.barcode,
-        itemNo: row.itemNo,
-        image: imageMap.get(normalizeItemNo(row.itemNo)) || "",
-      })),
+      rows: uniqueRows.map((row) => {
+        const selectedProduct = productMap.get(normalizeBarcode(row.barcode));
+
+        return {
+          barcode: row.barcode,
+          itemNo: row.itemNo,
+          image: resolveImageCatalogueExcelImage({
+            itemNo: row.itemNo,
+            selectedProduct,
+            catalogueImageMap: imageMap,
+            productsByItemNo,
+          }),
+        };
+      }),
     });
   } catch (error) {
     console.error(error);
