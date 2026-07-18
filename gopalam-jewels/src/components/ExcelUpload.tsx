@@ -1,5 +1,6 @@
 "use client";
 import * as XLSX from "xlsx";
+import { resolveProductImage } from "@/utils/resolveProductImage";
 
 export default function ExcelUpload({ setRows, savedProducts }: any) {
     const handleFileUpload = async (e: any) => {
@@ -44,19 +45,16 @@ export default function ExcelUpload({ setRows, savedProducts }: any) {
                 const match = savedProducts.find(
                     (p: any) => String(p.barcode).trim() === code
                 );
+                const resolvedImage = resolveProductImage(
+                    match || { barcode: code, data: null },
+                    savedProducts
+                );
                 console.log("MATCH", match);
                 return {
                     qrCode: "",
                     barcode: code,
-                    imageUrl:
-                        match?.imageCatalogueImage ||
-                        match?.image ||
-                        "",
-
-                    previewUrl:
-                        match?.imageCatalogueImage ||
-                        match?.image ||
-                        "",
+                    imageUrl: resolvedImage,
+                    previewUrl: resolvedImage,
                     data: match?.data || null,
                 };
             });

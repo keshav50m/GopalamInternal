@@ -10,6 +10,7 @@ import {
   type SearchFiltersState,
   type SearchProduct,
 } from "./types";
+import { resolveProductImage } from "@/utils/resolveProductImage";
 import styles from "./CustomSearch.module.css";
 
 type SearchResponse = {
@@ -27,8 +28,8 @@ const createEmptyScannerRow = () => ({
   data: null,
 });
 
-const toScannerRow = (product: SearchProduct) => {
-  const image = product.imageCatalogueImage || product.image || "";
+const toScannerRow = (product: SearchProduct, products: SearchProduct[]) => {
+  const image = resolveProductImage(product, products);
 
   return {
     qrCode: "",
@@ -175,7 +176,7 @@ export default function CustomSearch() {
     }
 
     const newRows = productsForScanner
-      .map(toScannerRow)
+      .map((product) => toScannerRow(product, products))
       .filter(
         (row) =>
           row.barcode &&

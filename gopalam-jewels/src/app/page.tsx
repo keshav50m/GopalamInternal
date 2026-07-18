@@ -14,6 +14,12 @@ export default function Page() {
     }
   }, []);
 
+  useEffect(() => {
+    if (jewelleryType === "casting") {
+      window.location.href = "/scanner";
+    }
+  }, [jewelleryType]);
+
   const selectType = (type: "casting" | "polki") => {
     localStorage.setItem("jewelleryType", type);
     setJewelleryType(type);
@@ -316,10 +322,6 @@ export default function Page() {
   // );
 
   if (jewelleryType === "casting") {
-    if (typeof window !== "undefined") {
-      window.location.href = "/scanner";
-    }
-
     return null;
   }
 }

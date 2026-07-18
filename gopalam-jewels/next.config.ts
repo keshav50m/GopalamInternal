@@ -24,6 +24,7 @@ class CopyServerChunksPlugin {
 }
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.resolve(__dirname),
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.plugins = config.plugins || [];

@@ -4,6 +4,7 @@ import { calculateTotals } from "@/utils/calculateTotals";
 import ProductTable from "@/components/productTable";
 import ExcelUpload from "@/components/ExcelUpload";
 import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
+import { resolveProductImage } from "@/utils/resolveProductImage";
 
 const createEmptyRow = () => ({
   qrCode: "",
@@ -12,6 +13,36 @@ const createEmptyRow = () => ({
   previewUrl: "",
   data: null,
 });
+
+const normalizeItemNo = (value: unknown) =>
+  String(value || "").trim().toUpperCase();
+
+const hasRowImage = (row: any) =>
+  Boolean(String(row.imageUrl || row.previewUrl || "").trim());
+
+const getUniqueItemNoRows = (rows: any[]) => {
+  const uniqueRows: any[] = [];
+  const rowIndexByIdentity = new Map<string, number>();
+
+  rows.forEach((row, index) => {
+    const itemNo = normalizeItemNo(row.data?.ITEMNO);
+    const barcode = normalizeItemNo(row.barcode);
+    const identity = itemNo || `BARCODE:${barcode || index}`;
+    const existingIndex = rowIndexByIdentity.get(identity);
+
+    if (existingIndex === undefined) {
+      rowIndexByIdentity.set(identity, uniqueRows.length);
+      uniqueRows.push(row);
+      return;
+    }
+
+    if (!hasRowImage(uniqueRows[existingIndex]) && hasRowImage(row)) {
+      uniqueRows[existingIndex] = row;
+    }
+  });
+
+  return uniqueRows;
+};
 
 export default function ProductPanel() {
   const [rows, setRows] = useState<any[]>([createEmptyRow()]);
@@ -24,6 +55,8 @@ export default function ProductPanel() {
   const skipNextScannerRowsSaveRef = useRef(false);
   const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
   const [companyName, setCompanyName] = useState("");
+  const [pdfVersion, setPdfVersion] = useState<"version1" | "version2">("version1");
+  const [uniqueItemNoForPDF, setUniqueItemNoForPDF] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -76,6 +109,31 @@ export default function ProductPanel() {
     sessionStorage.setItem("scannerRows", JSON.stringify(rows));
   }, [rows]);
 
+  useEffect(() => {
+    if (savedProducts.length === 0) return;
+
+    setRows((currentRows) => {
+      const lookupProducts = [...currentRows, ...savedProducts];
+      let changed = false;
+
+      const nextRows = currentRows.map((row) => {
+        if (row.imageUrl || row.previewUrl) return row;
+
+        const resolvedImage = resolveProductImage(row, lookupProducts);
+        if (!resolvedImage) return row;
+
+        changed = true;
+        return {
+          ...row,
+          imageUrl: resolvedImage,
+          previewUrl: resolvedImage,
+        };
+      });
+
+      return changed ? nextRows : currentRows;
+    });
+  }, [rows, savedProducts]);
+
   const fetchSavedProducts = async () => {
     try {
       const res = await fetch("/api/saved-products");
@@ -118,19 +176,21 @@ export default function ProductPanel() {
 
     if (match) {
       // ✅ Load saved data + image
-      const matchedImage = match.imageCatalogueImage || match.image || "";
+      const matchedImage = resolveProductImage(match, savedProducts);
       updated[index].barcode = match.barcode;
       updated[index].data = match.data;
       updated[index].imageUrl = matchedImage;
-
-      // Show image in preview
-      if (matchedImage) {
-        updated[index].previewUrl = matchedImage;
-      }
+      updated[index].previewUrl = matchedImage;
     } else if (parts.length >= 6) {   // Increased threshold for safety
       const parsed = parseQRCode(value);
+      const matchedImage = resolveProductImage(
+        { barcode: parsed.BARCODE, data: parsed },
+        savedProducts
+      );
       updated[index].barcode = parsed.BARCODE;
       updated[index].data = parsed;
+      updated[index].imageUrl = matchedImage;
+      updated[index].previewUrl = matchedImage;
 
     } else {
       // Partial input - just update QR, don't parse or add row
@@ -182,12 +242,10 @@ export default function ProductPanel() {
     const match = savedProducts.find(p => String(p.barcode).trim() === value.trim());
 
     if (match) {
-      const matchedImage = match.imageCatalogueImage || match.image || "";
+      const matchedImage = resolveProductImage(match, savedProducts);
       updated[index].data = match.data;
       updated[index].imageUrl = matchedImage;
-      if (matchedImage) {
-        updated[index].previewUrl = matchedImage;
-      }
+      updated[index].previewUrl = matchedImage;
     } else {
       updated[index].data = null;
       updated[index].imageUrl = "";
@@ -357,6 +415,11 @@ export default function ProductPanel() {
     const { __originalIndex, ...cleanRow } = row;
     return cleanRow;
   };
+
+  const preparedPdfRows = filteredRows.map(stripDisplayMetadata);
+  const pdfRowsPreview = uniqueItemNoForPDF
+    ? getUniqueItemNoRows(preparedPdfRows)
+    : preparedPdfRows;
 
   const handleDisplayedRowsChange = (nextRows: any[] | ((prevRows: any[]) => any[])) => {
     if (typeof nextRows === "function") {
@@ -578,6 +641,16 @@ export default function ProductPanel() {
                   }}
                 />
               </div>
+              <label style={{ display: "block", marginBottom: "10px" }}>
+                <input
+                  type="checkbox"
+                  checked={uniqueItemNoForPDF}
+                  onChange={(event) =>
+                    setUniqueItemNoForPDF(event.target.checked)
+                  }
+                />
+                Unique Item No
+              </label>
               <h3>Select Fields</h3>
 
               {Object.keys(selectedFields).map((key) => (
@@ -595,6 +668,30 @@ export default function ProductPanel() {
                   {key}
                 </label>
               ))}
+
+              <div style={{ marginTop: "15px", marginBottom: "10px" }}>
+                <h3 style={{ marginBottom: "8px" }}>PDF Layout</h3>
+                <label style={{ display: "block", marginBottom: "6px" }}>
+                  <input
+                    type="radio"
+                    name="pdf-layout"
+                    value="version1"
+                    checked={pdfVersion === "version1"}
+                    onChange={() => setPdfVersion("version1")}
+                  />
+                  Version 1 – Table Layout
+                </label>
+                <label style={{ display: "block" }}>
+                  <input
+                    type="radio"
+                    name="pdf-layout"
+                    value="version2"
+                    checked={pdfVersion === "version2"}
+                    onChange={() => setPdfVersion("version2")}
+                  />
+                  Version 2 – Catalogue Cards
+                </label>
+              </div>
 
               {isGenerating && (
                 <div style={{ marginBottom: "15px" }}>
@@ -620,6 +717,9 @@ export default function ProductPanel() {
               )}
 
               <div style={{ marginTop: "15px" }}>
+                <p style={{ fontSize: "12px", marginBottom: "8px" }}>
+                  PDF Products: {pdfRowsPreview.length}
+                </p>
                 <button
                   disabled={isGenerating}
                   style={{
@@ -630,8 +730,6 @@ export default function ProductPanel() {
                     setIsGenerating(true);
                     setProgress(10);
 
-                    const { generatePDF } = await import("@/utils/generatePDF");
-
                     // Fake smooth progress
                     let fakeProgress = 10;
                     const interval = setInterval(() => {
@@ -639,7 +737,19 @@ export default function ProductPanel() {
                       if (fakeProgress < 90) setProgress(fakeProgress);
                     }, 300);
 
-                    await generatePDF(filteredRows.map(stripDisplayMetadata), selectedFields, companyName);
+                    const rowsForPdf = filteredRows.map(stripDisplayMetadata);
+                    const pdfRows = uniqueItemNoForPDF
+                      ? getUniqueItemNoRows(rowsForPdf)
+                      : rowsForPdf;
+
+                    if (pdfVersion === "version1") {
+                      const { generatePDF } = await import("@/utils/generatePDF");
+                      await generatePDF(pdfRows, selectedFields, companyName);
+                    } else {
+                      const { generatePDFVersion2 } = await import("@/utils/generatePDFVersion2");
+                      await generatePDFVersion2(pdfRows, selectedFields, companyName);
+                    }
+
                     clearInterval(interval);
                     setProgress(100);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import * as XLSX from "xlsx";
+import { resolveProductImage } from "@/utils/resolveProductImage";
 
 type Props = {
     setRows: React.Dispatch<React.SetStateAction<any[]>>;
@@ -53,20 +54,17 @@ export default function QRCodeExcelUpload({
             const match = savedProducts.find(
                 (p) => String(p.barcode).trim() === barcode
             );
+            const resolvedImage = resolveProductImage(
+                match || { barcode, data: parsed },
+                savedProducts
+            );
 
             return {
                 qrCode: qrString,
                 barcode,
                 data: parsed,
-                imageUrl:
-                    match?.imageCatalogueImage ||
-                    match?.image ||
-                    "",
-
-                previewUrl:
-                    match?.imageCatalogueImage ||
-                    match?.image ||
-                    "",
+                imageUrl: resolvedImage,
+                previewUrl: resolvedImage,
             };
         });
 
