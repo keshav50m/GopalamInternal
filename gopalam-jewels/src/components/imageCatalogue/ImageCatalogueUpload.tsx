@@ -12,6 +12,8 @@ type CatalogueUploadRow = {
   previewUrl: string;
 };
 
+type ImageFilter = "all" | "present" | "missing";
+
 const createEmptyRow = (): CatalogueUploadRow => ({
   id: `${Date.now()}-${Math.random()}`,
   file: null,
@@ -20,11 +22,23 @@ const createEmptyRow = (): CatalogueUploadRow => ({
   previewUrl: "",
 });
 
+const isValidCatalogueRow = (row: CatalogueUploadRow) =>
+  Boolean(
+    String(row.barcode || "").trim() ||
+      String(row.itemNo || "").trim() ||
+      row.file ||
+      String(row.previewUrl || "").trim()
+  );
+
+const hasCatalogueImage = (row: CatalogueUploadRow) =>
+  Boolean(row.file || String(row.previewUrl || "").trim());
+
 export default function ImageCatalogueUpload() {
   const [rows, setRows] = useState<CatalogueUploadRow[]>([createEmptyRow()]);
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [imageFilter, setImageFilter] = useState<ImageFilter>("all");
   const barcodeRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const saveImageCatalogueItem = async (itemNo: string, image: string) => {
@@ -208,6 +222,7 @@ export default function ImageCatalogueUpload() {
           ? [...newRows, createEmptyRow()]
           : [createEmptyRow()]
       );
+      setImageFilter("all");
 
       setMessage(
         `${newRows.length} unique Item Nos loaded`
@@ -218,6 +233,67 @@ export default function ImageCatalogueUpload() {
           ? err.message
           : "Excel upload failed"
       );
+    }
+  };
+
+  const handleQRExcelUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    try {
+      setError("");
+      setMessage("");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(
+        "/api/image-catalogue/qr-excel",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "QR Excel upload failed"
+        );
+      }
+
+      const newRows = data.rows.map(
+        (row: any) => ({
+          id: `${Date.now()}-${Math.random()}`,
+          file: null,
+          barcode: row.barcode || "",
+          itemNo: row.itemNo || "",
+          previewUrl: row.image || "",
+        })
+      );
+
+      setRows(
+        newRows.length
+          ? [...newRows, createEmptyRow()]
+          : [createEmptyRow()]
+      );
+      setImageFilter("all");
+
+      setMessage(
+        `${newRows.length} unique Item Nos loaded from QR Excel`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "QR Excel upload failed"
+      );
+    } finally {
+      e.target.value = "";
     }
   };
 
@@ -238,6 +314,7 @@ export default function ImageCatalogueUpload() {
 
   const handleRemoveAll = () => {
     setRows([createEmptyRow()]);
+    setImageFilter("all");
     setMessage("");
     setError("");
   };
@@ -285,6 +362,36 @@ export default function ImageCatalogueUpload() {
     }
   };
 
+  const validRows = rows.filter(isValidCatalogueRow);
+  const allProductsCount = validRows.length;
+  const imagesPresentCount = validRows.filter(hasCatalogueImage).length;
+  const imagesMissingCount = validRows.filter(
+    (row) => !hasCatalogueImage(row)
+  ).length;
+  const displayedRows = rows.filter((row) => {
+    if (imageFilter === "all") return true;
+    if (!isValidCatalogueRow(row)) return false;
+    if (imageFilter === "present") return hasCatalogueImage(row);
+    return !hasCatalogueImage(row);
+  });
+  const imageFilterButtons: {
+    key: ImageFilter;
+    label: string;
+  }[] = [
+    {
+      key: "all",
+      label: `All Products (${allProductsCount})`,
+    },
+    {
+      key: "present",
+      label: `Images Present (${imagesPresentCount})`,
+    },
+    {
+      key: "missing",
+      label: `Images Missing (${imagesMissingCount})`,
+    },
+  ];
+
   return (
     <div className={styles.card}>
       {/* <div style={{ marginBottom: "20px" }}>
@@ -299,26 +406,59 @@ export default function ImageCatalogueUpload() {
         style={{
           marginBottom: "24px",
           display: "flex",
-          flexDirection: "column",
-          gap: "8px",
+          flexWrap: "wrap",
+          gap: "18px",
         }}
       >
-        <label
+        <div
           style={{
-            fontSize: "18px",
-            fontWeight: 700,
-            color: "#43391f",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
           }}
         >
-          Barcode Excel Upload
-        </label>
+          <label
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#43391f",
+            }}
+          >
+            Barcode Excel Upload
+          </label>
 
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          onChange={handleExcelUpload}
-          disabled={isUploading}
-        />
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleExcelUpload}
+            disabled={isUploading}
+          />
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          <label
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#43391f",
+            }}
+          >
+            QR Excel Upload
+          </label>
+
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleQRExcelUpload}
+            disabled={isUploading}
+          />
+        </div>
       </div>
       <div className={styles.tableWrap}>
         <table className={styles.catalogueTable}>
@@ -331,7 +471,7 @@ export default function ImageCatalogueUpload() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
+            {displayedRows.map((row, index) => (
               <tr key={row.id}>
                 <td style={{ verticalAlign: "middle" }}>
                   <div className={styles.imageCell}>
@@ -439,6 +579,23 @@ export default function ImageCatalogueUpload() {
       </div>
 
       <div className={styles.actionRow}>
+        {imageFilterButtons.map((button) => (
+          <button
+            key={button.key}
+            className={
+              imageFilter === button.key
+                ? styles.button
+                : styles.secondaryButton
+            }
+            disabled={isUploading}
+            onClick={() => setImageFilter(button.key)}
+          >
+            {button.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.actionRow}>
         <button
           className={styles.button}
           disabled={isUploading}
@@ -464,6 +621,58 @@ export default function ImageCatalogueUpload() {
 
       {message ? <div className={styles.success}>{message}</div> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
+
+      <button
+        onClick={() => {
+          window.scrollTo({
+            top: 0,
+            behavior: "smooth",
+          });
+        }}
+        style={{
+          position: "fixed",
+          right: "24px",
+          bottom: "78px",
+          zIndex: 900,
+          backgroundColor: "#111827",
+          color: "white",
+          padding: "12px 16px",
+          border: "none",
+          borderRadius: "999px",
+          fontSize: "14px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+        }}
+      >
+        ↑ Top
+      </button>
+
+      <button
+        onClick={() => {
+          window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: "smooth",
+          });
+        }}
+        style={{
+          position: "fixed",
+          right: "24px",
+          bottom: "24px",
+          zIndex: 900,
+          backgroundColor: "#111827",
+          color: "white",
+          padding: "12px 16px",
+          border: "none",
+          borderRadius: "999px",
+          fontSize: "14px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+        }}
+      >
+        ↓ Bottom
+      </button>
     </div>
   );
 }

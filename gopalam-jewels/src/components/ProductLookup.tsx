@@ -55,7 +55,8 @@ export default function ProductPanel() {
   const skipNextScannerRowsSaveRef = useRef(false);
   const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
   const [companyName, setCompanyName] = useState("");
-  const [pdfVersion, setPdfVersion] = useState<"version1" | "version2">("version1");
+  const [pdfVersion, setPdfVersion] =
+    useState<"version1" | "version2" | "version3">("version1");
   const [uniqueItemNoForPDF, setUniqueItemNoForPDF] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -689,7 +690,17 @@ export default function ProductPanel() {
                     checked={pdfVersion === "version2"}
                     onChange={() => setPdfVersion("version2")}
                   />
-                  Version 2 – Catalogue Cards
+                  Version 2 – Catalogue Layout
+                </label>
+                <label style={{ display: "block", marginTop: "6px" }}>
+                  <input
+                    type="radio"
+                    name="pdf-layout"
+                    value="version3"
+                    checked={pdfVersion === "version3"}
+                    onChange={() => setPdfVersion("version3")}
+                  />
+                  Version 3 – Large Product Cards
                 </label>
               </div>
 
@@ -745,9 +756,12 @@ export default function ProductPanel() {
                     if (pdfVersion === "version1") {
                       const { generatePDF } = await import("@/utils/generatePDF");
                       await generatePDF(pdfRows, selectedFields, companyName);
-                    } else {
+                    } else if (pdfVersion === "version2") {
                       const { generatePDFVersion2 } = await import("@/utils/generatePDFVersion2");
                       await generatePDFVersion2(pdfRows, selectedFields, companyName);
+                    } else {
+                      const { generatePDFVersion3 } = await import("@/utils/generatePDFVersion3");
+                      await generatePDFVersion3(pdfRows, selectedFields, companyName);
                     }
 
                     clearInterval(interval);
