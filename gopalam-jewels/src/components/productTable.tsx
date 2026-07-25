@@ -1,6 +1,28 @@
 // 
 
 import React from "react";
+import { applyDiscount } from "@/utils/applyDiscount";
+
+const hasDisplayValue = (value: unknown) =>
+  value !== null && value !== undefined && value !== "";
+
+const formatDiscountedPrice = (value: unknown, discountPercent: number) => {
+  if (!hasDisplayValue(value)) return "";
+
+  const discountedValue = applyDiscount(value, discountPercent);
+  return Number.isFinite(Number(discountedValue))
+    ? Math.round(Number(discountedValue))
+    : "";
+};
+
+const formatDiscountedUSD = (value: unknown, discountPercent: number) => {
+  if (!hasDisplayValue(value)) return "";
+
+  const discountedValue = applyDiscount(value, discountPercent);
+  return Number.isFinite(Number(discountedValue))
+    ? Number(discountedValue).toFixed(2)
+    : "";
+};
 
 export default function ProductTable({
   rows,
@@ -11,7 +33,9 @@ export default function ProductTable({
   lastQRRef,
   lastBarcodeRef,
   totals,
-  setSelectedImage
+  setSelectedImage,
+  priceDiscountPercent,
+  usdDiscountPercent
 }: any) {
   return (
     <table>
@@ -112,8 +136,15 @@ export default function ProductTable({
                 : ""}
             </td>
 
-            <td>{row.data?.["TAG PRICE"]}</td>
-            <td>{row.data?.USD}</td>
+            <td>
+              {formatDiscountedPrice(
+                row.data?.["TAG PRICE"],
+                priceDiscountPercent
+              )}
+            </td>
+            <td>
+              {formatDiscountedUSD(row.data?.USD, usdDiscountPercent)}
+            </td>
             <td>{row.data?.SIZE}</td>
 
             <td>

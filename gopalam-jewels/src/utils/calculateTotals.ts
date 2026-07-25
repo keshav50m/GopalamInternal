@@ -1,5 +1,11 @@
 
-export const calculateTotals = (rows: any[]) => {
+import { applyDiscount } from "@/utils/applyDiscount";
+
+export const calculateTotals = (
+  rows: any[],
+  priceDiscountPercent = 0,
+  usdDiscountPercent = 0
+) => {
   let totalGross = 0;
   let totalStoneWt = 0;
   let totalDai = 0;
@@ -17,8 +23,18 @@ export const calculateTotals = (rows: any[]) => {
     totalGross += parseFloat(d["GROSS WT"] || 0);
     totalStoneWt += parseFloat(d["STONE WT"] || 0);
     totalDai += parseFloat(d["DAI WT"] || 0);
-    totalPrice += parseFloat(d["TAG PRICE"] || 0);
-    totalUSD += parseFloat(d["USD"] || 0);
+    const discountedPrice = applyDiscount(
+      d["TAG PRICE"],
+      priceDiscountPercent
+    );
+    const discountedUSD = applyDiscount(d["USD"], usdDiscountPercent);
+
+    totalPrice += Number.isFinite(Number(discountedPrice))
+      ? Math.round(Number(discountedPrice))
+      : 0;
+    totalUSD += Number.isFinite(Number(discountedUSD))
+      ? Number(discountedUSD)
+      : 0;
   });
 
   return {

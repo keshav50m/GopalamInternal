@@ -5,6 +5,7 @@ import ProductTable from "@/components/productTable";
 import ExcelUpload from "@/components/ExcelUpload";
 import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
 import { resolveProductImage } from "@/utils/resolveProductImage";
+import { applyDiscount } from "@/utils/applyDiscount";
 
 const createEmptyRow = () => ({
   qrCode: "",
@@ -46,6 +47,8 @@ const getUniqueItemNoRows = (rows: any[]) => {
 
 export default function ProductPanel() {
   const [rows, setRows] = useState<any[]>([createEmptyRow()]);
+  const [priceDiscountPercent, setPriceDiscountPercent] = useState(0);
+  const [usdDiscountPercent, setUsdDiscountPercent] = useState(0);
 
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
   const lastQRRef = useRef<HTMLInputElement>(null);
@@ -422,6 +425,50 @@ export default function ProductPanel() {
     ? getUniqueItemNoRows(preparedPdfRows)
     : preparedPdfRows;
 
+  const clampDiscountPercent = (value: string) => {
+    if (value.trim() === "") return 0;
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return 0;
+
+    return Math.min(100, Math.max(0, numericValue));
+  };
+
+  const prepareDiscountedRowsForPDF = (rowsForPdf: any[]) =>
+    rowsForPdf.map((row) => {
+      if (!row.data) return row;
+
+      const discountedPrice = applyDiscount(
+        row.data["TAG PRICE"],
+        priceDiscountPercent
+      );
+      const discountedUSD = applyDiscount(
+        row.data.USD,
+        usdDiscountPercent
+      );
+      const hasPrice =
+        row.data["TAG PRICE"] !== null &&
+        row.data["TAG PRICE"] !== undefined &&
+        row.data["TAG PRICE"] !== "";
+      const hasUSD =
+        row.data.USD !== null &&
+        row.data.USD !== undefined &&
+        row.data.USD !== "";
+
+      return {
+        ...row,
+        data: {
+          ...row.data,
+          "TAG PRICE": hasPrice && Number.isFinite(Number(discountedPrice))
+            ? Math.round(Number(discountedPrice))
+            : "",
+          USD: hasUSD && Number.isFinite(Number(discountedUSD))
+            ? Number(discountedUSD).toFixed(2)
+            : "",
+        },
+      };
+    });
+
   const handleDisplayedRowsChange = (nextRows: any[] | ((prevRows: any[]) => any[])) => {
     if (typeof nextRows === "function") {
       setRows((prevRows) => nextRows(prevRows).map(stripDisplayMetadata));
@@ -469,7 +516,11 @@ export default function ProductPanel() {
     { key: "missing", label: `Images Missing (${imagesMissingCount})` },
   ] as const;
 
-  const totals = calculateTotals(filteredRows);
+  const totals = calculateTotals(
+    filteredRows,
+    priceDiscountPercent,
+    usdDiscountPercent
+  );
   return (
     <div>
       <div style={{
@@ -515,6 +566,53 @@ export default function ProductPanel() {
         </div>
       </div>
 
+      <div style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "12px",
+        alignItems: "flex-end",
+        marginBottom: "10px"
+      }}>
+        <label style={{ fontSize: "13px", fontWeight: "bold" }}>
+          Price Discount (%)
+          <input
+            type="text"
+            inputMode="decimal"
+            value={priceDiscountPercent}
+            onChange={(event) =>
+              setPriceDiscountPercent(
+                clampDiscountPercent(event.target.value)
+              )
+            }
+            style={{
+              display: "block",
+              width: "90px",
+              marginTop: "4px",
+              padding: "5px 7px"
+            }}
+          />
+        </label>
+        <label style={{ fontSize: "13px", fontWeight: "bold" }}>
+          USD Discount (%)
+          <input
+            type="text"
+            inputMode="decimal"
+            value={usdDiscountPercent}
+            onChange={(event) =>
+              setUsdDiscountPercent(
+                clampDiscountPercent(event.target.value)
+              )
+            }
+            style={{
+              display: "block",
+              width: "90px",
+              marginTop: "4px",
+              padding: "5px 7px"
+            }}
+          />
+        </label>
+      </div>
+
       <ProductTable
         rows={filteredRows}
         setRows={handleDisplayedRowsChange}
@@ -525,6 +623,8 @@ export default function ProductPanel() {
         lastBarcodeRef={lastBarcodeRef}
         totals={totals}
         setSelectedImage={setSelectedImage}
+        priceDiscountPercent={priceDiscountPercent}
+        usdDiscountPercent={usdDiscountPercent}
       />
       {/* 🔥 TOTAL ROW ALIGNED WITH TABLE */}
 
@@ -749,9 +849,11 @@ export default function ProductPanel() {
                     }, 300);
 
                     const rowsForPdf = filteredRows.map(stripDisplayMetadata);
-                    const pdfRows = uniqueItemNoForPDF
+                    const currentPdfRows = uniqueItemNoForPDF
                       ? getUniqueItemNoRows(rowsForPdf)
                       : rowsForPdf;
+                    const pdfRows =
+                      prepareDiscountedRowsForPDF(currentPdfRows);
 
                     if (pdfVersion === "version1") {
                       const { generatePDF } = await import("@/utils/generatePDF");
