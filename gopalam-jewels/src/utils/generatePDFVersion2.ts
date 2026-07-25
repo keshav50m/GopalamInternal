@@ -1,4 +1,9 @@
 type SelectedFields = Record<string, boolean>;
+import {
+  buildCloudinaryDeliveryUrl,
+  CLOUDINARY_PDF_TRANSFORMATION,
+  getCloudinaryAssetKey,
+} from "@/utils/cloudinaryDelivery";
 
 type ProductRow = {
   barcode?: string | number;
@@ -102,11 +107,12 @@ const truncateToWidth = (
 
 const loadImage = async (
   src: string,
-  cache: Map<string, Promise<LoadedImage | null>>
+  cache: Map<string, Promise<LoadedImage | null>>,
+  cacheKey = src
 ) => {
-  if (!cache.has(src)) {
+  if (!cache.has(cacheKey)) {
     cache.set(
-      src,
+      cacheKey,
       new Promise<LoadedImage | null>(async (resolve) => {
         try {
           const response = await fetch(src);
@@ -145,7 +151,7 @@ const loadImage = async (
     );
   }
 
-  return cache.get(src);
+  return cache.get(cacheKey);
 };
 
 export const generatePDFVersion2 = async (
@@ -253,7 +259,14 @@ export const generatePDFVersion2 = async (
 
     if (selectedFields.image) {
       const imageSrc = cleanValue(row.imageUrl) || cleanValue(row.previewUrl);
-      const image = imageSrc ? await loadImage(imageSrc, imageCache) : null;
+      const optimizedImageSrc = buildCloudinaryDeliveryUrl(
+        imageSrc,
+        CLOUDINARY_PDF_TRANSFORMATION
+      );
+      const imageCacheKey = getCloudinaryAssetKey(optimizedImageSrc);
+      const image = optimizedImageSrc
+        ? await loadImage(optimizedImageSrc, imageCache, imageCacheKey)
+        : null;
 
       if (image) {
         const imageBoxX = x + padding;

@@ -2,6 +2,10 @@
 
 import type { SearchProduct } from "./types";
 import styles from "./CustomSearch.module.css";
+import {
+  buildCloudinaryDeliveryUrl,
+  CLOUDINARY_THUMBNAIL_TRANSFORMATION,
+} from "@/utils/cloudinaryDelivery";
 
 type Props = {
   products: SearchProduct[];
@@ -76,7 +80,12 @@ export default function SearchResults({
                     {image ? (
                       <img
                         className={styles.productImage}
-                        src={image}
+                        src={buildCloudinaryDeliveryUrl(
+                          image,
+                          CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                        )}
+                        loading="lazy"
+                        decoding="async"
                         alt={`Product ${displayValue(product.barcode)}`}
                       />
                     ) : (

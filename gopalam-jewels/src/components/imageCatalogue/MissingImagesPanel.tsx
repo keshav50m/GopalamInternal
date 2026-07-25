@@ -3,6 +3,11 @@
 import { useState } from "react";
 import styles from "./ImageCatalogue.module.css";
 import { uploadImageToCloudinary } from "./imageUpload";
+import {
+  buildCloudinaryDeliveryUrl,
+  CLOUDINARY_THUMBNAIL_TRANSFORMATION,
+  getFileUploadKey,
+} from "@/utils/cloudinaryDelivery";
 
 type MissingProduct = {
   _id: string;
@@ -10,6 +15,7 @@ type MissingProduct = {
   itemNo: string;
   file: File | null;
   previewUrl: string;
+  uploadedUrl?: string;
 };
 
 export default function MissingImagesPanel() {
@@ -63,6 +69,7 @@ export default function MissingImagesPanel() {
           ...product,
           file,
           previewUrl: file ? URL.createObjectURL(file) : "",
+          uploadedUrl: "",
         };
       })
     );
@@ -70,8 +77,11 @@ export default function MissingImagesPanel() {
     setError("");
   };
 
-  const persistProductImage = async (product: MissingProduct) => {
-    if (!product.file) {
+  const persistProductImage = async (
+    product: MissingProduct,
+    uploadCache = new Map<string, Promise<string>>()
+  ) => {
+    if (!product.file && !product.uploadedUrl) {
       throw new Error(`Select an image for Item No ${product.itemNo || "unknown"}`);
     }
 
@@ -79,7 +89,41 @@ export default function MissingImagesPanel() {
       throw new Error(`Item No is missing for barcode ${product.barcode}`);
     }
 
-    const image = await uploadImageToCloudinary(product.file);
+    let image = product.uploadedUrl || "";
+
+    if (!image && product.file) {
+      const uploadKey = await getFileUploadKey(
+        product.file,
+        product.itemNo
+      );
+
+      if (!uploadCache.has(uploadKey)) {
+        uploadCache.set(
+          uploadKey,
+          uploadImageToCloudinary(product.file)
+        );
+      }
+
+      image = await uploadCache.get(uploadKey)!;
+
+      if (product.previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(product.previewUrl);
+      }
+
+      setProducts((currentProducts) =>
+        currentProducts.map((currentProduct) =>
+          currentProduct._id === product._id
+            ? {
+                ...currentProduct,
+                file: null,
+                previewUrl: image,
+                uploadedUrl: image,
+              }
+            : currentProduct
+        )
+      );
+    }
+
     const response = await fetch("/api/missing-products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -119,7 +163,9 @@ export default function MissingImagesPanel() {
   };
 
   const handleSaveAll = async () => {
-    const selectedProducts = products.filter((product) => product.file);
+    const selectedProducts = products.filter(
+      (product) => product.file || product.uploadedUrl
+    );
 
     setMessage("");
     setError("");
@@ -133,10 +179,11 @@ export default function MissingImagesPanel() {
 
     const successfulIds: string[] = [];
     const failures: string[] = [];
+    const uploadCache = new Map<string, Promise<string>>();
 
     for (const product of selectedProducts) {
       try {
-        await persistProductImage(product);
+        await persistProductImage(product, uploadCache);
         successfulIds.push(product._id);
       } catch (saveError) {
         failures.push(
@@ -248,7 +295,12 @@ export default function MissingImagesPanel() {
                         {product.previewUrl ? (
                           <img
                             className={styles.thumbnail}
-                            src={product.previewUrl}
+                            src={buildCloudinaryDeliveryUrl(
+                              product.previewUrl,
+                              CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                            )}
+                            loading="lazy"
+                            decoding="async"
                             alt={`Preview for ${product.itemNo}`}
                           />
                         ) : (
@@ -262,7 +314,9 @@ export default function MissingImagesPanel() {
                       <button
                         className={styles.button}
                         disabled={
-                          isSaving || !product.file || !product.itemNo
+                          isSaving ||
+                          (!product.file && !product.uploadedUrl) ||
+                          !product.itemNo
                         }
                         onClick={() => handleSave(product)}
                       >

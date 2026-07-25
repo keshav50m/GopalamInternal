@@ -1,4 +1,9 @@
 import jsPDF from "jspdf";
+import {
+    buildCloudinaryDeliveryUrl,
+    CLOUDINARY_PDF_TRANSFORMATION,
+    getCloudinaryAssetKey,
+} from "@/utils/cloudinaryDelivery";
 
 
 const compressImage = async (src: string, quality = 0.5, maxWidth = 600) => {
@@ -31,6 +36,7 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
 
     const { default: jsPDF } = await import("jspdf");
     const pdf = new jsPDF("p", "mm", "a4");
+    const imageCache = new Map<string, Promise<string>>();
 
     pdf.setFontSize(14);
     pdf.setFont("helvetica", "bold");
@@ -194,7 +200,20 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         let compressedImg = null;
 
         if (imgSrc && selectedFields.image) {
-            compressedImg = await compressImage(imgSrc, 0.5, 600);
+            const optimizedImgSrc = buildCloudinaryDeliveryUrl(
+                imgSrc,
+                CLOUDINARY_PDF_TRANSFORMATION
+            );
+            const imageCacheKey = getCloudinaryAssetKey(optimizedImgSrc);
+
+            if (!imageCache.has(imageCacheKey)) {
+                imageCache.set(
+                    imageCacheKey,
+                    compressImage(optimizedImgSrc, 0.5, 600)
+                );
+            }
+
+            compressedImg = await imageCache.get(imageCacheKey)!;
 
             pdf.addImage(
                 compressedImg,

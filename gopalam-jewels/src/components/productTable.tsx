@@ -2,6 +2,10 @@
 
 import React from "react";
 import { applyDiscount } from "@/utils/applyDiscount";
+import {
+  buildCloudinaryDeliveryUrl,
+  CLOUDINARY_THUMBNAIL_TRANSFORMATION,
+} from "@/utils/cloudinaryDelivery";
 
 const hasDisplayValue = (value: unknown) =>
   value !== null && value !== undefined && value !== "";
@@ -84,7 +88,12 @@ export default function ProductTable({
 
               {row.previewUrl || row.imageUrl ? (
                 <img
-                  src={row.previewUrl || row.imageUrl}
+                  src={buildCloudinaryDeliveryUrl(
+                    row.previewUrl || row.imageUrl,
+                    CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                  )}
+                  loading="lazy"
+                  decoding="async"
                   width="80"
                   style={{
                     marginTop: "8px", borderRadius: "6px",

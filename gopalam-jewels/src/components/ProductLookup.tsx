@@ -6,6 +6,7 @@ import ExcelUpload from "@/components/ExcelUpload";
 import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
 import { resolveProductImage } from "@/utils/resolveProductImage";
 import { applyDiscount } from "@/utils/applyDiscount";
+import { getFileUploadKey } from "@/utils/cloudinaryDelivery";
 
 const createEmptyRow = () => ({
   qrCode: "",
@@ -53,6 +54,9 @@ export default function ProductPanel() {
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
   const lastQRRef = useRef<HTMLInputElement>(null);
   const lastBarcodeRef = useRef<HTMLInputElement>(null);
+  const scannerUploadCacheRef = useRef(
+    new Map<string, Promise<string>>()
+  );
   const previousRowsLengthRef = useRef(rows.length);
   const hasLoadedScannerRowsRef = useRef(false);
   const skipNextScannerRowsSaveRef = useRef(false);
@@ -283,7 +287,7 @@ export default function ProductPanel() {
     updated[index].previewUrl = previewUrl;
     setRows(updated);
 
-    uploadToCloudinary(file, index);
+    uploadToCloudinary(file, index, previewUrl);
   };
 
   const compressImage = (file: File): Promise<File> => {
@@ -325,25 +329,53 @@ export default function ProductPanel() {
     });
   };
 
-  const uploadToCloudinary = async (file: File, index: number) => {
+  const uploadToCloudinary = async (
+    file: File,
+    index: number,
+    previewUrl: string
+  ) => {
+    const row = rows[index];
+    const uploadScope = String(
+      row?.data?.ITEMNO || row?.barcode || ""
+    ).trim();
+    const uploadKey = await getFileUploadKey(file, uploadScope);
+
     try {
-      const compressedFile = await compressImage(file);
+      if (!scannerUploadCacheRef.current.has(uploadKey)) {
+        scannerUploadCacheRef.current.set(
+          uploadKey,
+          (async () => {
+            const compressedFile = await compressImage(file);
 
-      const formData = new FormData();
-      formData.append("file", compressedFile);
-      formData.append("upload_preset", "gopalam_jewels");
+            const formData = new FormData();
+            formData.append("file", compressedFile);
+            formData.append("upload_preset", "gopalam_jewels");
 
-      const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-        { method: "POST", body: formData }
-      );
-      const data = await res.json();
-      if (data.secure_url) {
-        const updated = [...rows];
-        updated[index].imageUrl = data.secure_url;
-        setRows(updated);
+            const res = await fetch(
+              `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+              { method: "POST", body: formData }
+            );
+            const data = await res.json();
+
+            if (!res.ok || !data.secure_url) {
+              throw new Error(data.error?.message || "Cloudinary upload failed");
+            }
+
+            return String(data.secure_url);
+          })()
+        );
       }
+
+      const imageUrl = await scannerUploadCacheRef.current.get(uploadKey)!;
+      setRows((currentRows) =>
+        currentRows.map((currentRow, currentIndex) =>
+          currentIndex === index && currentRow.previewUrl === previewUrl
+            ? { ...currentRow, imageUrl }
+            : currentRow
+        )
+      );
     } catch (err) {
+      scannerUploadCacheRef.current.delete(uploadKey);
       console.error(err);
     }
   };

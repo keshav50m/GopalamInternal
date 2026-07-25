@@ -3,6 +3,11 @@
 import { useState, ChangeEvent, useRef } from "react";
 import styles from "./ImageCatalogue.module.css";
 import { uploadImageToCloudinary } from "./imageUpload";
+import {
+  buildCloudinaryDeliveryUrl,
+  CLOUDINARY_THUMBNAIL_TRANSFORMATION,
+  getFileUploadKey,
+} from "@/utils/cloudinaryDelivery";
 
 type CatalogueUploadRow = {
   id: string;
@@ -340,12 +345,34 @@ export default function ImageCatalogueUpload() {
       const validRows = rows.filter(
         (row) => row.itemNo.trim()
       );
+      const uploadCache = new Map<string, Promise<string>>();
 
       for (const row of validRows) {
         let imageUrl = row.previewUrl;
 
         if (row.file) {
-          imageUrl = await uploadImageToCloudinary(row.file);
+          const uploadKey = await getFileUploadKey(
+            row.file,
+            row.itemNo
+          );
+
+          if (!uploadCache.has(uploadKey)) {
+            uploadCache.set(
+              uploadKey,
+              uploadImageToCloudinary(row.file)
+            );
+          }
+
+          imageUrl = await uploadCache.get(uploadKey)!;
+
+          if (row.previewUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(row.previewUrl);
+          }
+
+          updateRow(row.id, {
+            file: null,
+            previewUrl: imageUrl,
+          });
         }
 
         await saveImageCatalogueItem(
@@ -493,7 +520,12 @@ export default function ImageCatalogueUpload() {
                     {row.previewUrl ? (
                       <img
                         className={styles.thumbnail}
-                        src={row.previewUrl}
+                        src={buildCloudinaryDeliveryUrl(
+                          row.previewUrl,
+                          CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                        )}
+                        loading="lazy"
+                        decoding="async"
                         alt={`Preview ${index + 1}`}
                       />
                     ) : (
