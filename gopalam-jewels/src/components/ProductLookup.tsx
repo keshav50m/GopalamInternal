@@ -871,14 +871,11 @@ export default function ProductPanel() {
                   }}
                   onClick={async () => {
                     setIsGenerating(true);
-                    setProgress(10);
-
-                    // Fake smooth progress
-                    let fakeProgress = 10;
-                    const interval = setInterval(() => {
-                      fakeProgress += 10;
-                      if (fakeProgress < 90) setProgress(fakeProgress);
-                    }, 300);
+                    setProgress(0);
+                    const handlePdfProgress = (nextProgress: number) =>
+                      setProgress(
+                        Math.min(100, Math.max(0, nextProgress))
+                      );
 
                     const rowsForPdf = filteredRows.map(stripDisplayMetadata);
                     const currentPdfRows = uniqueItemNoForPDF
@@ -889,16 +886,30 @@ export default function ProductPanel() {
 
                     if (pdfVersion === "version1") {
                       const { generatePDF } = await import("@/utils/generatePDF");
-                      await generatePDF(pdfRows, selectedFields, companyName);
+                      await generatePDF(
+                        pdfRows,
+                        selectedFields,
+                        companyName,
+                        handlePdfProgress
+                      );
                     } else if (pdfVersion === "version2") {
                       const { generatePDFVersion2 } = await import("@/utils/generatePDFVersion2");
-                      await generatePDFVersion2(pdfRows, selectedFields, companyName);
+                      await generatePDFVersion2(
+                        pdfRows,
+                        selectedFields,
+                        companyName,
+                        handlePdfProgress
+                      );
                     } else {
                       const { generatePDFVersion3 } = await import("@/utils/generatePDFVersion3");
-                      await generatePDFVersion3(pdfRows, selectedFields, companyName);
+                      await generatePDFVersion3(
+                        pdfRows,
+                        selectedFields,
+                        companyName,
+                        handlePdfProgress
+                      );
                     }
 
-                    clearInterval(interval);
                     setProgress(100);
 
                     setTimeout(() => {

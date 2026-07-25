@@ -4,6 +4,13 @@ import {
     CLOUDINARY_PDF_TRANSFORMATION,
     getCloudinaryAssetKey,
 } from "@/utils/cloudinaryDelivery";
+import {
+    getOrCreateBoundedCacheEntry,
+    imageLoadProgress,
+    pdfDrawProgress,
+    preloadWithConcurrency,
+    type PDFProgressCallback,
+} from "@/utils/pdfImagePipeline";
 
 
 const compressImage = async (src: string, quality = 0.5, maxWidth = 600) => {
@@ -29,14 +36,54 @@ const compressImage = async (src: string, quality = 0.5, maxWidth = 600) => {
     });
 };
 
+const version1ImageCache = new Map<string, Promise<string>>();
 
+const getVersion1Image = (source: string) => {
+    const optimizedSource = buildCloudinaryDeliveryUrl(
+        source,
+        CLOUDINARY_PDF_TRANSFORMATION
+    );
+    const cacheKey = getCloudinaryAssetKey(optimizedSource);
+
+    return getOrCreateBoundedCacheEntry(
+        version1ImageCache,
+        cacheKey,
+        () => compressImage(optimizedSource, 0.5, 600)
+    );
+};
 
 export const generatePDF = async (rows: any[], selectedFields: Record<string, boolean>, companyName: string
+    , onProgress?: PDFProgressCallback
 ) => {
 
     const { default: jsPDF } = await import("jspdf");
     const pdf = new jsPDF("p", "mm", "a4");
-    const imageCache = new Map<string, Promise<string>>();
+    onProgress?.(5);
+
+    const uniqueImages = new Map<string, string>();
+    if (selectedFields.image) {
+        rows.forEach((row) => {
+            const source = String(row.imageUrl || row.previewUrl || "").trim();
+            if (!source) return;
+
+            const optimizedSource = buildCloudinaryDeliveryUrl(
+                source,
+                CLOUDINARY_PDF_TRANSFORMATION
+            );
+            uniqueImages.set(
+                getCloudinaryAssetKey(optimizedSource),
+                source
+            );
+        });
+    }
+
+    await preloadWithConcurrency(
+        [...uniqueImages.values()],
+        (source) => getVersion1Image(source),
+        (completed, total) =>
+            onProgress?.(imageLoadProgress(completed, total))
+    );
+    if (uniqueImages.size === 0) onProgress?.(80);
 
     pdf.setFontSize(14);
     pdf.setFont("helvetica", "bold");
@@ -119,6 +166,9 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
     y += 10;
     pdf.setFont("helvetica", "normal");
 
+    const drawableRowCount = rows.filter((row) => row.data).length;
+    let drawnRowCount = 0;
+
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         if (!row.data) continue;
@@ -200,20 +250,7 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         let compressedImg = null;
 
         if (imgSrc && selectedFields.image) {
-            const optimizedImgSrc = buildCloudinaryDeliveryUrl(
-                imgSrc,
-                CLOUDINARY_PDF_TRANSFORMATION
-            );
-            const imageCacheKey = getCloudinaryAssetKey(optimizedImgSrc);
-
-            if (!imageCache.has(imageCacheKey)) {
-                imageCache.set(
-                    imageCacheKey,
-                    compressImage(optimizedImgSrc, 0.5, 600)
-                );
-            }
-
-            compressedImg = await imageCache.get(imageCacheKey)!;
+            compressedImg = await getVersion1Image(imgSrc);
 
             pdf.addImage(
                 compressedImg,
@@ -277,6 +314,8 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
 
         // move Y dynamically
         y += dynamicHeight + 2.5;
+        drawnRowCount += 1;
+        onProgress?.(pdfDrawProgress(drawnRowCount, drawableRowCount));
     }
     const pageCount = pdf.getNumberOfPages();
 
@@ -292,5 +331,6 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         );
     }
 
+    onProgress?.(100);
     pdf.save("products.pdf");
 };

@@ -1,9 +1,17 @@
-type SelectedFields = Record<string, boolean>;
 import {
   buildCloudinaryDeliveryUrl,
   CLOUDINARY_PDF_TRANSFORMATION,
   getCloudinaryAssetKey,
 } from "@/utils/cloudinaryDelivery";
+import {
+  getOrCreateBoundedCacheEntry,
+  imageLoadProgress,
+  pdfDrawProgress,
+  preloadWithConcurrency,
+  type PDFProgressCallback,
+} from "@/utils/pdfImagePipeline";
+
+type SelectedFields = Record<string, boolean>;
 
 type ProductRow = {
   barcode?: string | number;
@@ -17,6 +25,11 @@ type LoadedImage = {
   width: number;
   height: number;
 };
+
+const version2ImageCache = new Map<
+  string,
+  Promise<LoadedImage | null>
+>();
 
 const fieldLabels: Record<string, string> = {
   barcode: "Barcode",
@@ -110,9 +123,10 @@ const loadImage = async (
   cache: Map<string, Promise<LoadedImage | null>>,
   cacheKey = src
 ) => {
-  if (!cache.has(cacheKey)) {
-    cache.set(
-      cacheKey,
+  return getOrCreateBoundedCacheEntry(
+    cache,
+    cacheKey,
+    () =>
       new Promise<LoadedImage | null>(async (resolve) => {
         try {
           const response = await fetch(src);
@@ -148,21 +162,47 @@ const loadImage = async (
           resolve(null);
         }
       })
-    );
-  }
-
-  return cache.get(cacheKey);
+  );
 };
 
 export const generatePDFVersion2 = async (
   rows: ProductRow[],
   selectedFields: SelectedFields,
-  companyName: string
+  companyName: string,
+  onProgress?: PDFProgressCallback
 ) => {
   const { default: jsPDF } = await import("jspdf");
   const pdf = new jsPDF("p", "mm", "a4");
   const products = rows.filter(isProductRow);
-  const imageCache = new Map<string, Promise<LoadedImage | null>>();
+  const imageCache = version2ImageCache;
+  onProgress?.(5);
+
+  const uniqueImages = new Map<string, string>();
+  if (selectedFields.image) {
+    products.forEach((row) => {
+      const imageSource =
+        cleanValue(row.imageUrl) || cleanValue(row.previewUrl);
+      if (!imageSource) return;
+
+      const optimizedSource = buildCloudinaryDeliveryUrl(
+        imageSource,
+        CLOUDINARY_PDF_TRANSFORMATION
+      );
+      uniqueImages.set(
+        getCloudinaryAssetKey(optimizedSource),
+        optimizedSource
+      );
+    });
+  }
+
+  await preloadWithConcurrency(
+    [...uniqueImages.entries()],
+    ([cacheKey, source]) =>
+      loadImage(source, imageCache, cacheKey),
+    (completed, total) =>
+      onProgress?.(imageLoadProgress(completed, total))
+  );
+  if (uniqueImages.size === 0) onProgress?.(80);
 
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -309,8 +349,15 @@ export const generatePDFVersion2 = async (
 
     for (let index = 0; index < pageProducts.length; index += 1) {
       await drawProductCard(pageProducts[index], index);
+      onProgress?.(
+        pdfDrawProgress(
+          pageIndex * productsPerPage + index + 1,
+          products.length
+        )
+      );
     }
   }
 
+  onProgress?.(100);
   pdf.save("products-catalogue.pdf");
 };

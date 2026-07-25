@@ -1,9 +1,17 @@
-type SelectedFields = Record<string, boolean>;
 import {
   buildCloudinaryDeliveryUrl,
   CLOUDINARY_PDF_TRANSFORMATION,
   getCloudinaryAssetKey,
 } from "@/utils/cloudinaryDelivery";
+import {
+  getOrCreateBoundedCacheEntry,
+  imageLoadProgress,
+  pdfDrawProgress,
+  preloadWithConcurrency,
+  type PDFProgressCallback,
+} from "@/utils/pdfImagePipeline";
+
+type SelectedFields = Record<string, boolean>;
 
 type ProductRow = {
   barcode?: string | number;
@@ -17,6 +25,11 @@ type LoadedImage = {
   width: number;
   height: number;
 };
+
+const version3ImageCache = new Map<
+  string,
+  Promise<LoadedImage | null>
+>();
 
 const code128Patterns = [
   "212222", "222122", "222221", "121223", "121322", "131222", "122213",
@@ -120,9 +133,10 @@ const loadImage = async (
   cache: Map<string, Promise<LoadedImage | null>>,
   cacheKey = src
 ) => {
-  if (!cache.has(cacheKey)) {
-    cache.set(
-      cacheKey,
+  return getOrCreateBoundedCacheEntry(
+    cache,
+    cacheKey,
+    () =>
       new Promise<LoadedImage | null>(async (resolve) => {
         try {
           const response = await fetch(src);
@@ -160,10 +174,7 @@ const loadImage = async (
           resolve(null);
         }
       })
-    );
-  }
-
-  return cache.get(cacheKey);
+  );
 };
 
 const getCode128Codes = (value: string) => {
@@ -253,12 +264,41 @@ const drawTextLines = (
 export const generatePDFVersion3 = async (
   rows: ProductRow[],
   selectedFields: SelectedFields,
-  companyName: string
+  companyName: string,
+  onProgress?: PDFProgressCallback
 ) => {
   const { default: jsPDF } = await import("jspdf");
   const pdf = new jsPDF("p", "mm", "a4");
   const products = rows.filter(isProductRow);
-  const imageCache = new Map<string, Promise<LoadedImage | null>>();
+  const imageCache = version3ImageCache;
+  onProgress?.(5);
+
+  const uniqueImages = new Map<string, string>();
+  if (selectedFields.image) {
+    products.forEach((row) => {
+      const imageSource =
+        cleanValue(row.imageUrl) || cleanValue(row.previewUrl);
+      if (!imageSource) return;
+
+      const optimizedSource = buildCloudinaryDeliveryUrl(
+        imageSource,
+        CLOUDINARY_PDF_TRANSFORMATION
+      );
+      uniqueImages.set(
+        getCloudinaryAssetKey(optimizedSource),
+        optimizedSource
+      );
+    });
+  }
+
+  await preloadWithConcurrency(
+    [...uniqueImages.entries()],
+    ([cacheKey, source]) =>
+      loadImage(source, imageCache, cacheKey),
+    (completed, total) =>
+      onProgress?.(imageLoadProgress(completed, total))
+  );
+  if (uniqueImages.size === 0) onProgress?.(80);
   const generatedAt = new Date();
   const displayDate = formatDate(generatedAt);
 
@@ -408,11 +448,18 @@ export const generatePDFVersion3 = async (
 
     for (let index = 0; index < pageProducts.length; index += 1) {
       await drawCard(pageProducts[index], index, pageIndex * productsPerPage + index);
+      onProgress?.(
+        pdfDrawProgress(
+          pageIndex * productsPerPage + index + 1,
+          products.length
+        )
+      );
     }
   }
 
   const filenameCompany = safeFilenamePart(safeCompanyName);
   const filenamePrefix = filenameCompany ? `${filenameCompany}_` : "";
 
+  onProgress?.(100);
   pdf.save(`${filenamePrefix}Gopalam_Catalogue_Version_3_${fileDate(generatedAt)}.pdf`);
 };
