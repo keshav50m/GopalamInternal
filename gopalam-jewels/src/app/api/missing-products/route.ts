@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
+import { requireAuthenticatedUser } from "@/lib/auth";
 
 export async function GET(req: Request) {
   try {
+    const auth = await requireAuthenticatedUser();
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(req.url);
     const requestedLimit = Number(searchParams.get("limit")) || 50;
     const limit = Math.min(Math.max(requestedLimit, 1), 150);
@@ -75,6 +78,8 @@ export async function GET(req: Request) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser();
+    if (auth.response) return auth.response;
     const { barcode, itemNo, image } = await request.json();
     const normalizedBarcode = String(barcode || "").trim();
     const normalizedItemNo = String(itemNo || "").trim();

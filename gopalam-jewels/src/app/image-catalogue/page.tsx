@@ -2,6 +2,7 @@ import Link from "next/link";
 import ImageCatalogueUpload from "@/components/imageCatalogue/ImageCatalogueUpload";
 import styles from "@/components/imageCatalogue/ImageCatalogue.module.css";
 import MissingImagesPanel from "@/components/imageCatalogue/MissingImagesPanel";
+import AdminButton from "@/components/AdminButton";
 
 export default function ImageCataloguePage() {
   return (
@@ -12,6 +13,7 @@ export default function ImageCataloguePage() {
             <span>Gopalam Jewels</span>
             <h1>Image Catalogue</h1>
           </div>
+          <AdminButton />
 
           <nav className={styles.navLinks} aria-label="Primary navigation">
             <Link className={styles.navLink} href="/">

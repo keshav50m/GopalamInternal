@@ -1,0 +1,28 @@
+.shell { min-height: 100vh; padding: 38px 24px 60px; background: #f5f3ef; color: #29261f; }
+.header { max-width: 920px; margin: 0 auto 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.brand { color: #9a7a30; font-size: 14px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; }
+.header h1 { margin: 7px 0 5px; font-size: 34px; }
+.header p { margin: 0; color: #6b6558; }
+.backLink { padding: 9px 13px; border: 1px solid #c9b987; border-radius: 7px; background: white; color: #5d4b1c; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.settingsGrid { max-width: 920px; margin: 0 auto; display: grid; gap: 16px; }
+.section { padding: 24px; border: 1px solid #ded5bf; border-radius: 12px; background: white; box-shadow: 0 6px 24px rgba(51, 43, 22, 0.05); }
+.sectionHeading { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.sectionHeading h2 { margin: 0 0 4px; font-size: 20px; }
+.sectionHeading p { margin: 0; color: #746e61; font-size: 14px; }
+.sectionIcon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: #f5edda; }
+.details { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.details div { padding: 12px; border-radius: 7px; background: #faf8f3; }
+.details dt { color: #766e5e; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.details dd { margin: 4px 0 0; font-weight: 700; }
+.primaryButton, .secondaryButton, .logoutButton { padding: 10px 15px; border-radius: 7px; font-size: 14px; font-weight: 800; cursor: pointer; }
+.primaryButton { border: 0; background: #9a7a30; color: white; }
+.secondaryButton { margin-top: 10px; border: 1px solid #bbb3a2; background: white; color: #4e493f; }
+.logoutButton { border: 0; background: #991b1b; color: white; }
+.logoutButton:disabled { opacity: .6; cursor: not-allowed; }
+.formPanel { max-width: 460px; padding-top: 2px; }
+
+@media (max-width: 640px) {
+  .header { align-items: flex-start; flex-direction: column; }
+  .details { grid-template-columns: 1fr; }
+  .section { padding: 19px; }
+}

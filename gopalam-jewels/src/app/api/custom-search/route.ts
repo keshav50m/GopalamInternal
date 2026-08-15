@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Document, Filter } from "mongodb";
 import clientPromise from "@/lib/mongodb";
+import { requireAuthenticatedUser } from "@/lib/auth";
 
 const textFieldMap = {
   barcode: "barcode",
@@ -62,6 +63,8 @@ const parseNumber = (value: string | null) => {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser();
+    if (auth.response) return auth.response;
     await ensureIndexes();
 
     const { searchParams } = request.nextUrl;

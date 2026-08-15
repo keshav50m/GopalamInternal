@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import ProductPanel from "@/components/ProductLookup";
+import AdminButton from "@/components/AdminButton";
 
 export default function ScannerPage() {
   const resetType = () => {
@@ -18,6 +19,7 @@ export default function ScannerPage() {
             className="logo"
             alt="Gopalam Jewels"
           />
+          <AdminButton />
 
           <nav style={{ display: "flex", gap: "10px", marginLeft: "auto" }}>
             <Link

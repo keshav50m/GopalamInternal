@@ -63,7 +63,10 @@ export default function ProductPanel() {
   const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
   const [companyName, setCompanyName] = useState("");
   const [pdfVersion, setPdfVersion] =
-    useState<"version1" | "version2" | "version3">("version1");
+    useState<"version1" | "version2" | "version3" | "version4">("version1");
+  const [pdfGridRows, setPdfGridRows] = useState("6");
+  const [pdfGridColumns, setPdfGridColumns] = useState("5");
+  const [pdfGridError, setPdfGridError] = useState("");
   const [uniqueItemNoForPDF, setUniqueItemNoForPDF] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -834,7 +837,62 @@ export default function ProductPanel() {
                   />
                   Version 3 – Large Product Cards
                 </label>
+                <label style={{ display: "block", marginTop: "6px" }}>
+                  <input
+                    type="radio"
+                    name="pdf-layout"
+                    value="version4"
+                    checked={pdfVersion === "version4"}
+                    onChange={() => {
+                      setPdfVersion("version4");
+                      setPdfGridError("");
+                    }}
+                  />
+                  Version 4 – Dynamic Image Grid
+                </label>
               </div>
+
+              {pdfVersion === "version4" && (
+                <div style={{ marginBottom: "15px" }}>
+                  <div style={{ display: "flex", gap: "12px" }}>
+                    <label style={{ flex: 1, fontWeight: "bold" }}>
+                      Rows
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        step="1"
+                        value={pdfGridRows}
+                        onChange={(event) => {
+                          setPdfGridRows(event.target.value);
+                          setPdfGridError("");
+                        }}
+                        style={{ width: "100%", padding: "6px", marginTop: "4px" }}
+                      />
+                    </label>
+                    <label style={{ flex: 1, fontWeight: "bold" }}>
+                      Columns
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        step="1"
+                        value={pdfGridColumns}
+                        onChange={(event) => {
+                          setPdfGridColumns(event.target.value);
+                          setPdfGridError("");
+                        }}
+                        style={{ width: "100%", padding: "6px", marginTop: "4px" }}
+                      />
+                    </label>
+                  </div>
+                  {pdfGridError && (
+                    <p role="alert" style={{ color: "#dc2626", fontSize: "12px", marginTop: "6px" }}>
+                      {pdfGridError}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {isGenerating && (
                 <div style={{ marginBottom: "15px" }}>
@@ -870,6 +928,21 @@ export default function ProductPanel() {
                     cursor: isGenerating ? "not-allowed" : "pointer"
                   }}
                   onClick={async () => {
+                    const gridRows = Number(pdfGridRows);
+                    const gridColumns = Number(pdfGridColumns);
+                    if (
+                      pdfVersion === "version4" &&
+                      (!Number.isInteger(gridRows) ||
+                        !Number.isInteger(gridColumns) ||
+                        gridRows < 1 ||
+                        gridColumns < 1 ||
+                        gridRows > 10 ||
+                        gridColumns > 10)
+                    ) {
+                      setPdfGridError("Rows and Columns must be whole numbers from 1 to 10.");
+                      return;
+                    }
+
                     setIsGenerating(true);
                     setProgress(0);
                     const handlePdfProgress = (nextProgress: number) =>
@@ -900,12 +973,20 @@ export default function ProductPanel() {
                         companyName,
                         handlePdfProgress
                       );
-                    } else {
+                    } else if (pdfVersion === "version3") {
                       const { generatePDFVersion3 } = await import("@/utils/generatePDFVersion3");
                       await generatePDFVersion3(
                         pdfRows,
                         selectedFields,
                         companyName,
+                        handlePdfProgress
+                      );
+                    } else {
+                      const { generatePDFVersion4 } = await import("@/utils/generatePDFVersion4");
+                      await generatePDFVersion4(
+                        pdfRows,
+                        companyName,
+                        { rows: gridRows, columns: gridColumns },
                         handlePdfProgress
                       );
                     }

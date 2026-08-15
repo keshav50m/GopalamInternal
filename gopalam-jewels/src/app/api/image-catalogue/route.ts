@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
+import { requireAuthenticatedUser } from "@/lib/auth";
 
 export async function GET(req: Request) {
+  const auth = await requireAuthenticatedUser();
+  if (auth.response) return auth.response;
   const { searchParams } = new URL(req.url);
 
   const itemNo = searchParams.get("itemNo");
@@ -24,6 +27,8 @@ export async function GET(req: Request) {
 }
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser();
+    if (auth.response) return auth.response;
     const { itemNo, image } = await request.json();
     const normalizedItemNo = String(itemNo || "").trim();
     const normalizedImage = String(image || "").trim();
@@ -54,8 +59,8 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Image catalogue updated successfully",
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Image Catalogue POST Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update image catalogue" }, { status: 500 });
   }
 }

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
+import { requireAuthenticatedUser } from '@/lib/auth';
 
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser();
+    if (auth.response) return auth.response;
     const client = await clientPromise;
     const db = client.db("gopalamJewels");
     const { searchParams } = request.nextUrl;
@@ -69,14 +72,16 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json(productsWithCatalogueImages);
-  } catch (error: any) {
+  } catch (error) {
     console.error("GET Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to load saved products" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser();
+    if (auth.response) return auth.response;
     const { products } = await request.json();
 
     if (!products || products.length === 0) {
@@ -133,8 +138,8 @@ export async function POST(request: NextRequest) {
       message: `${products.length} products saved successfully`
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("POST Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save products" }, { status: 500 });
   }
 }

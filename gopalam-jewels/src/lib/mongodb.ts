@@ -1,6 +1,23 @@
 import { MongoClient } from 'mongodb';
+import fs from 'fs';
+import path from 'path';
 
-const uri = "mongodb+srv://keshav50m_db_user:pMqXx2YPvhoGnEWH@cluster0.knba3b7.mongodb.net/?appName=Cluster0";
+const getDevelopmentMongoUri = () => {
+  if (process.env.NODE_ENV === 'production') return '';
+
+  try {
+    const envPath = path.join(process.cwd(), 'server', '.env');
+    const envContents = fs.readFileSync(envPath, 'utf8');
+    const mongoLine = envContents
+      .split(/\r?\n/)
+      .find((line) => line.startsWith('MONGO_URI='));
+    return mongoLine?.slice('MONGO_URI='.length).trim() || '';
+  } catch {
+    return '';
+  }
+};
+
+const uri = process.env.MONGO_URI || getDevelopmentMongoUri();
 
 if (!uri) {
   throw new Error("MongoDB URI is missing!");

@@ -15,6 +15,7 @@ import {
   sortByRecentUpload,
 } from "@/components/dashboard/dashboardUtils";
 import styles from "@/components/dashboard/Dashboard.module.css";
+import AdminButton from "@/components/AdminButton";
 
 export default function DashboardPage() {
   const [products, setProducts] = useState<SavedProduct[]>([]);
@@ -61,6 +62,7 @@ export default function DashboardPage() {
             <span>Gopalam Jewels</span>
             <h1>Admin Dashboard</h1>
           </div>
+          <AdminButton />
 
           <nav className={styles.navLinks} aria-label="Primary navigation">
             <Link className={styles.navLink} href="/">
