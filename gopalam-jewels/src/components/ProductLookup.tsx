@@ -63,7 +63,7 @@ export default function ProductPanel() {
   const [focusField, setFocusField] = useState<"qr" | "barcode">("qr");
   const [companyName, setCompanyName] = useState("");
   const [pdfVersion, setPdfVersion] =
-    useState<"version1" | "version2" | "version3" | "version4">("version1");
+    useState<"version1" | "version2" | "version3" | "version4" | "version5">("version1");
   const [pdfGridRows, setPdfGridRows] = useState("6");
   const [pdfGridColumns, setPdfGridColumns] = useState("5");
   const [pdfGridError, setPdfGridError] = useState("");
@@ -456,7 +456,7 @@ export default function ProductPanel() {
   };
 
   const preparedPdfRows = filteredRows.map(stripDisplayMetadata);
-  const pdfRowsPreview = uniqueItemNoForPDF
+  const pdfRowsPreview = uniqueItemNoForPDF || pdfVersion === "version5"
     ? getUniqueItemNoRows(preparedPdfRows)
     : preparedPdfRows;
 
@@ -850,9 +850,22 @@ export default function ProductPanel() {
                   />
                   Version 4 – Dynamic Image Grid
                 </label>
+                <label style={{ display: "block", marginTop: "6px" }}>
+                  <input
+                    type="radio"
+                    name="pdf-layout"
+                    value="version5"
+                    checked={pdfVersion === "version5"}
+                    onChange={() => {
+                      setPdfVersion("version5");
+                      setPdfGridError("");
+                    }}
+                  />
+                  Version 5 – Unique Item Quantity Grid
+                </label>
               </div>
 
-              {pdfVersion === "version4" && (
+              {(pdfVersion === "version4" || pdfVersion === "version5") && (
                 <div style={{ marginBottom: "15px" }}>
                   <div style={{ display: "flex", gap: "12px" }}>
                     <label style={{ flex: 1, fontWeight: "bold" }}>
@@ -931,7 +944,7 @@ export default function ProductPanel() {
                     const gridRows = Number(pdfGridRows);
                     const gridColumns = Number(pdfGridColumns);
                     if (
-                      pdfVersion === "version4" &&
+                      (pdfVersion === "version4" || pdfVersion === "version5") &&
                       (!Number.isInteger(gridRows) ||
                         !Number.isInteger(gridColumns) ||
                         gridRows < 1 ||
@@ -951,11 +964,12 @@ export default function ProductPanel() {
                       );
 
                     const rowsForPdf = filteredRows.map(stripDisplayMetadata);
-                    const currentPdfRows = uniqueItemNoForPDF
+                    const currentPdfRows = uniqueItemNoForPDF && pdfVersion !== "version5"
                       ? getUniqueItemNoRows(rowsForPdf)
                       : rowsForPdf;
-                    const pdfRows =
-                      prepareDiscountedRowsForPDF(currentPdfRows);
+                    const pdfRows = pdfVersion === "version5"
+                      ? currentPdfRows
+                      : prepareDiscountedRowsForPDF(currentPdfRows);
 
                     if (pdfVersion === "version1") {
                       const { generatePDF } = await import("@/utils/generatePDF");
@@ -981,9 +995,17 @@ export default function ProductPanel() {
                         companyName,
                         handlePdfProgress
                       );
-                    } else {
+                    } else if (pdfVersion === "version4") {
                       const { generatePDFVersion4 } = await import("@/utils/generatePDFVersion4");
                       await generatePDFVersion4(
+                        pdfRows,
+                        companyName,
+                        { rows: gridRows, columns: gridColumns },
+                        handlePdfProgress
+                      );
+                    } else {
+                      const { generatePDFVersion5 } = await import("@/utils/generatePDFVersion5");
+                      await generatePDFVersion5(
                         pdfRows,
                         companyName,
                         { rows: gridRows, columns: gridColumns },
