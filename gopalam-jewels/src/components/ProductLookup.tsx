@@ -7,6 +7,8 @@ import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
 import { resolveProductImage } from "@/utils/resolveProductImage";
 import { applyDiscount } from "@/utils/applyDiscount";
 import { getFileUploadKey } from "@/utils/cloudinaryDelivery";
+import { uploadProductImage } from "@/utils/uploadProductImage";
+import { normalizeBarcode } from "@/utils/normalizeBarcode";
 
 const createEmptyRow = () => ({
   qrCode: "",
@@ -246,40 +248,80 @@ export default function ProductPanel() {
 
   // Adding this for barcode manual input in case QR code is not scanning properly. This allows users to type or paste the barcode and it will fetch data from saved products if available. 
   const handleManualBarcode = (index: number, value: string) => {
-    const updated = [...rows];
-    updated[index].barcode = value;
+    setRows((currentRows) =>
+      currentRows.map((row, currentIndex) =>
+        currentIndex === index
+          ? {
+              ...row,
+              barcode: value,
+              data: null,
+              imageUrl: "",
+              previewUrl: "",
+            }
+          : row
+      )
+    );
+  };
 
-    // Search in saved products
-    const match = savedProducts.find(p => String(p.barcode).trim() === value.trim());
+  const handleBarcodeLookup = async (index: number, value: string) => {
+    const barcode = normalizeBarcode(value);
+    if (!barcode) return;
 
-    if (match) {
-      const matchedImage = resolveProductImage(match, savedProducts);
-      updated[index].data = match.data;
-      updated[index].imageUrl = matchedImage;
-      updated[index].previewUrl = matchedImage;
-    } else {
-      updated[index].data = null;
-      updated[index].imageUrl = "";
-      updated[index].previewUrl = "";
+    try {
+      const response = await fetch("/api/saved-products/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ barcodes: [barcode] }),
+      });
+      const lookupData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(lookupData.error || "Barcode lookup failed");
+      }
+
+      const match = Array.isArray(lookupData.products)
+        ? lookupData.products[0]
+        : null;
+
+      setFocusField("barcode");
+      setRows((currentRows) => {
+        const currentRow = currentRows[index];
+        if (!currentRow || normalizeBarcode(currentRow.barcode) !== barcode) {
+          return currentRows;
+        }
+
+        const nextRows = [...currentRows];
+        if (!match) {
+          nextRows[index] = {
+            ...currentRow,
+            data: null,
+            imageUrl: "",
+            previewUrl: "",
+          };
+          return nextRows;
+        }
+
+        const matchedImage = resolveProductImage(match, [
+          match,
+          ...savedProducts,
+        ]);
+        nextRows[index] = {
+          ...currentRow,
+          barcode: normalizeBarcode(match.barcode),
+          data: match.data,
+          imageUrl: matchedImage,
+          previewUrl: matchedImage,
+        };
+
+        if (index === currentRows.length - 1) {
+          nextRows.push(createEmptyRow());
+        }
+
+        return nextRows;
+      });
+    } catch (error) {
+      console.error("Barcode lookup failed:", error);
     }
-    setFocusField("barcode");
-
-    // ✅ AUTO ADD NEW ROW (same as QR)
-    if (index === rows.length - 1 && value.trim() !== "") {
-      setTimeout(() => {
-        setRows((prevRows) => {
-          if (prevRows.length === index + 1) {
-            return [
-              ...prevRows,
-              createEmptyRow()
-            ];
-          }
-          return prevRows;
-        });
-      }, 2000);
-    }
-
-    setRows(updated);
   };
 
   const handleImage = (index: number, file: File) => {
@@ -290,49 +332,10 @@ export default function ProductPanel() {
     updated[index].previewUrl = previewUrl;
     setRows(updated);
 
-    uploadToCloudinary(file, index, previewUrl);
+    uploadImage(file, index, previewUrl);
   };
 
-  const compressImage = (file: File): Promise<File> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-
-        ctx?.drawImage(img, 0, 0);
-
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              resolve(file);
-              return;
-            }
-
-            const compressedFile = new File(
-              [blob],
-              file.name,
-              {
-                type: "image/jpeg",
-                lastModified: Date.now(),
-              }
-            );
-
-            resolve(compressedFile);
-          },
-          "image/jpeg",
-          0.6 // compression quality
-        );
-      };
-
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
-  const uploadToCloudinary = async (
+  const uploadImage = async (
     file: File,
     index: number,
     previewUrl: string
@@ -347,25 +350,7 @@ export default function ProductPanel() {
       if (!scannerUploadCacheRef.current.has(uploadKey)) {
         scannerUploadCacheRef.current.set(
           uploadKey,
-          (async () => {
-            const compressedFile = await compressImage(file);
-
-            const formData = new FormData();
-            formData.append("file", compressedFile);
-            formData.append("upload_preset", "gopalam_jewels");
-
-            const res = await fetch(
-              `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-              { method: "POST", body: formData }
-            );
-            const data = await res.json();
-
-            if (!res.ok || !data.secure_url) {
-              throw new Error(data.error?.message || "Cloudinary upload failed");
-            }
-
-            return String(data.secure_url);
-          })()
+          uploadProductImage(file)
         );
       }
 
@@ -653,6 +638,7 @@ export default function ProductPanel() {
         setRows={handleDisplayedRowsChange}
         handleQRScan={(index: number, value: string) => handleQRScan(getOriginalRowIndex(index), value)}
         handleManualBarcode={(index: number, value: string) => handleManualBarcode(getOriginalRowIndex(index), value)}
+        handleBarcodeLookup={(index: number, value: string) => handleBarcodeLookup(getOriginalRowIndex(index), value)}
         handleImage={(index: number, file: File) => handleImage(getOriginalRowIndex(index), file)}
         lastQRRef={lastQRRef}
         lastBarcodeRef={lastBarcodeRef}

@@ -1,6 +1,7 @@
 "use client";
 import * as XLSX from "xlsx";
 import { resolveProductImage } from "@/utils/resolveProductImage";
+import { normalizeBarcode } from "@/utils/normalizeBarcode";
 
 export default function ExcelUpload({ setRows, savedProducts }: any) {
     const handleFileUpload = async (e: any) => {
@@ -40,22 +41,40 @@ export default function ExcelUpload({ setRows, savedProducts }: any) {
             return;
         }
 
+        const response = await fetch("/api/saved-products/lookup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ barcodes }),
+        });
+        const lookupData = await response.json();
+
+        if (!response.ok) {
+            throw new Error(lookupData.error || "Barcode lookup failed");
+        }
+
+        const matchedProducts = Array.isArray(lookupData.products)
+            ? lookupData.products
+            : [];
+        const productsByBarcode = new Map(
+            matchedProducts.map((product: any) => [
+                normalizeBarcode(product.barcode),
+                product,
+            ])
+        );
+
         setRows((prev: any[]) => {
             const newRows = barcodes.map((code) => {
-                const match = savedProducts.find(
-                    (p: any) => String(p.barcode).trim() === code
-                );
+                const match = productsByBarcode.get(normalizeBarcode(code));
                 const resolvedImage = resolveProductImage(
                     match || { barcode: code, data: null },
-                    savedProducts
+                    [...matchedProducts, ...savedProducts]
                 );
-                console.log("MATCH", match);
                 return {
                     qrCode: "",
                     barcode: code,
                     imageUrl: resolvedImage,
                     previewUrl: resolvedImage,
-                    data: match?.data || null,
+                    data: (match as any)?.data || null,
                 };
             });
 

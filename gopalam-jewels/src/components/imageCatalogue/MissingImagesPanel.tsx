@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import styles from "./ImageCatalogue.module.css";
-import { uploadImageToCloudinary } from "./imageUpload";
+import { uploadProductImage } from "@/utils/uploadProductImage";
 import {
   buildCloudinaryDeliveryUrl,
   CLOUDINARY_THUMBNAIL_TRANSFORMATION,
@@ -100,7 +100,7 @@ export default function MissingImagesPanel() {
       if (!uploadCache.has(uploadKey)) {
         uploadCache.set(
           uploadKey,
-          uploadImageToCloudinary(product.file)
+          uploadProductImage(product.file)
         );
       }
 

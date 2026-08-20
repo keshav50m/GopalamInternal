@@ -33,6 +33,7 @@ export default function ProductTable({
   setRows,
   handleQRScan,
   handleManualBarcode,
+  handleBarcodeLookup,
   handleImage,
   lastQRRef,
   lastBarcodeRef,
@@ -126,6 +127,11 @@ export default function ProductTable({
                 ref={i === rows.length - 1 ? lastBarcodeRef : null}
                 value={row.barcode}
                 onChange={(e) => handleManualBarcode(i, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  handleBarcodeLookup(i, e.currentTarget.value);
+                }}
                 placeholder="Enter Barcode"
                 style={{ width: "100px" }}
               />

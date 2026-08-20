@@ -2,7 +2,7 @@
 
 import { useState, ChangeEvent, useRef } from "react";
 import styles from "./ImageCatalogue.module.css";
-import { uploadImageToCloudinary } from "./imageUpload";
+import { uploadProductImage } from "@/utils/uploadProductImage";
 import {
   buildCloudinaryDeliveryUrl,
   CLOUDINARY_THUMBNAIL_TRANSFORMATION,
@@ -359,7 +359,7 @@ export default function ImageCatalogueUpload() {
           if (!uploadCache.has(uploadKey)) {
             uploadCache.set(
               uploadKey,
-              uploadImageToCloudinary(row.file)
+              uploadProductImage(row.file)
             );
           }
 
