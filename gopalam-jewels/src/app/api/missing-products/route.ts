@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { requireAuthenticatedUser } from "@/lib/auth";
+import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+
+const missingImageConditions = (field: "image" | "imageUrl") => [
+  { [field]: { $exists: false } },
+  { [field]: "" },
+  { [field]: null },
+  { [field]: { $regex: /^\s*blob:/i } },
+];
 
 export async function GET(req: Request) {
   try {
@@ -18,18 +26,10 @@ export async function GET(req: Request) {
       .find({
         $and: [
           {
-            $or: [
-              { image: { $exists: false } },
-              { image: "" },
-              { image: null },
-            ],
+            $or: missingImageConditions("image"),
           },
           {
-            $or: [
-              { imageUrl: { $exists: false } },
-              { imageUrl: "" },
-              { imageUrl: null },
-            ],
+            $or: missingImageConditions("imageUrl"),
           },
         ],
       })
@@ -47,12 +47,14 @@ export async function GET(req: Request) {
       ? await db
           .collection("imageCatalogue")
           .find({ itemNo: { $in: itemNos }, image: { $nin: ["", null] } })
-          .project({ itemNo: 1 })
+          .project({ itemNo: 1, image: 1 })
           .toArray()
       : [];
 
     const itemNosWithImages = new Set(
-      catalogueItems.map((item: any) => String(item.itemNo || "").trim())
+      catalogueItems
+        .filter((item: any) => normalizeStoredImageUrl(item.image))
+        .map((item: any) => String(item.itemNo || "").trim())
     );
 
     const products = productsMissingSavedImage
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest) {
     const { barcode, itemNo, image } = await request.json();
     const normalizedBarcode = String(barcode || "").trim();
     const normalizedItemNo = String(itemNo || "").trim();
-    const normalizedImage = String(image || "").trim();
+    const normalizedImage = normalizeStoredImageUrl(image);
 
     if (!normalizedBarcode || !normalizedItemNo || !normalizedImage) {
       return NextResponse.json(

@@ -9,6 +9,7 @@ import { applyDiscount } from "@/utils/applyDiscount";
 import { getFileUploadKey } from "@/utils/cloudinaryDelivery";
 import { uploadProductImage } from "@/utils/uploadProductImage";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
+import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
 
 const createEmptyRow = () => ({
   qrCode: "",
@@ -420,15 +421,23 @@ export default function ProductPanel() {
 
   const validProductRows = rows.filter(isValidProductRow);
   const allProductsCount = validProductRows.length;
-  const imagesPresentCount = validProductRows.filter((row) => row.imageUrl).length;
-  const imagesMissingCount = validProductRows.filter((row) => !row.imageUrl).length;
+  const imagesPresentCount = validProductRows.filter((row) =>
+    normalizeStoredImageUrl(row.imageUrl)
+  ).length;
+  const imagesMissingCount = validProductRows.filter(
+    (row) => !normalizeStoredImageUrl(row.imageUrl)
+  ).length;
 
   const filteredRows = rows
     .map((row, originalIndex) => ({ ...row, __originalIndex: originalIndex }))
     .filter((row) => {
       if (!isValidProductRow(row)) return true;
-      if (imageFilter === "present") return row.imageUrl;
-      if (imageFilter === "missing") return !row.imageUrl;
+      if (imageFilter === "present") {
+        return Boolean(normalizeStoredImageUrl(row.imageUrl));
+      }
+      if (imageFilter === "missing") {
+        return !normalizeStoredImageUrl(row.imageUrl);
+      }
       return true;
     });
 

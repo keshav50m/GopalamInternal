@@ -1,10 +1,11 @@
 import type { ChartPoint, DashboardStats, SavedProduct } from "./types";
+import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
 
 export const getBarcode = (product: SavedProduct) =>
   String(product.barcode || product.data?.BARCODE || "").trim();
 
 export const hasImage = (product: SavedProduct) =>
-  Boolean(String(product.image || "").trim());
+  Boolean(normalizeStoredImageUrl(product.image));
 
 export const getStoneName = (product: SavedProduct) =>
   String(product.data?.["STONE NAME"] || "Unknown").trim() || "Unknown";

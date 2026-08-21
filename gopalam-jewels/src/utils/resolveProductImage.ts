@@ -1,3 +1,5 @@
+import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+
 type ProductLike = {
   barcode?: string | number;
   image?: string;
@@ -18,10 +20,12 @@ const getBarcode = (product: ProductLike) =>
 const getItemNo = (product: ProductLike) => normalize(product.data?.ITEMNO);
 
 const getBarcodeImage = (product: ProductLike) =>
-  normalize(product.imageUrl || product.previewUrl || product.image);
+  normalizeStoredImageUrl(product.imageUrl) ||
+  normalizeStoredImageUrl(product.previewUrl) ||
+  normalizeStoredImageUrl(product.image);
 
 const getCatalogueImage = (product: ProductLike) =>
-  normalize(product.imageCatalogueImage);
+  normalizeStoredImageUrl(product.imageCatalogueImage);
 
 export const resolveProductImage = (
   product: ProductLike | null | undefined,

@@ -4,7 +4,7 @@ import { requireAuthenticatedUser } from "@/lib/auth";
 import clientPromise from "@/lib/mongodb";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
 
-const MAX_BARCODES_PER_LOOKUP = 1000;
+const BARCODE_QUERY_BATCH_SIZE = 1000;
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,19 +27,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (barcodes.length > MAX_BARCODES_PER_LOOKUP) {
-      return NextResponse.json(
-        { error: `A maximum of ${MAX_BARCODES_PER_LOOKUP} barcodes is allowed` },
-        { status: 400 }
-      );
-    }
-
     const client = await clientPromise;
     const db = client.db("gopalamJewels");
-    const products = await db
-      .collection("savedProducts")
-      .find({ barcode: { $in: barcodes } })
-      .toArray();
+    const products = [];
+
+    for (let index = 0; index < barcodes.length; index += BARCODE_QUERY_BATCH_SIZE) {
+      const barcodeBatch = barcodes.slice(index, index + BARCODE_QUERY_BATCH_SIZE);
+      const matchedProducts = await db
+        .collection("savedProducts")
+        .find({ barcode: { $in: barcodeBatch } })
+        .toArray();
+
+      products.push(...matchedProducts);
+    }
 
     const itemNos = Array.from(
       new Set(

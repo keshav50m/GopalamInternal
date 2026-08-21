@@ -1,3 +1,5 @@
+import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+
 type ProductLike = {
   barcode?: string | number;
   image?: string;
@@ -16,8 +18,6 @@ export const normalizeBarcode = (value: unknown) =>
 
 export const normalizeItemNo = (value: unknown) =>
   String(value || "").trim().toUpperCase();
-
-const normalizeImage = (value: unknown) => String(value || "").trim();
 
 export const buildProductsByItemNo = (products: ProductLike[]) => {
   const productsByItemNo = new Map<string, ProductLike[]>();
@@ -38,7 +38,7 @@ export const buildCatalogueImageMap = (catalogueImages: CatalogueImageLike[]) =>
   new Map(
     catalogueImages.map((item) => [
       normalizeItemNo(item.itemNo),
-      normalizeImage(item.image),
+      normalizeStoredImageUrl(item.image),
     ])
   );
 
@@ -59,13 +59,13 @@ export const resolveImageCatalogueExcelImage = ({
   const catalogueImage = catalogueImageMap.get(normalizedItemNo);
   if (catalogueImage) return catalogueImage;
 
-  const selectedProductImage = normalizeImage(selectedProduct?.image);
+  const selectedProductImage = normalizeStoredImageUrl(selectedProduct?.image);
   if (selectedProductImage) return selectedProductImage;
 
   return (
     productsByItemNo
       .get(normalizedItemNo)
-      ?.map((product) => normalizeImage(product.image))
+      ?.map((product) => normalizeStoredImageUrl(product.image))
       .find(Boolean) || ""
   );
 };

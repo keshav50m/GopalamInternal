@@ -8,6 +8,7 @@ import {
   CLOUDINARY_THUMBNAIL_TRANSFORMATION,
   getFileUploadKey,
 } from "@/utils/cloudinaryDelivery";
+import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
 
 type CatalogueUploadRow = {
   id: string;
@@ -36,7 +37,7 @@ const isValidCatalogueRow = (row: CatalogueUploadRow) =>
   );
 
 const hasCatalogueImage = (row: CatalogueUploadRow) =>
-  Boolean(row.file || String(row.previewUrl || "").trim());
+  Boolean(row.file || normalizeStoredImageUrl(row.previewUrl));
 
 export default function ImageCatalogueUpload() {
   const [rows, setRows] = useState<CatalogueUploadRow[]>([createEmptyRow()]);
@@ -330,7 +331,7 @@ export default function ImageCatalogueUpload() {
 
     const invalidRowIndex = rows.findIndex(
       (row) =>
-        (!row.file && !row.previewUrl) ||
+        !hasCatalogueImage(row) ||
         !row.itemNo.trim()
     );
 
@@ -517,7 +518,7 @@ export default function ImageCatalogueUpload() {
                         }
                       />
                     </label>
-                    {row.previewUrl ? (
+                    {hasCatalogueImage(row) ? (
                       <img
                         className={styles.thumbnail}
                         src={buildCloudinaryDeliveryUrl(
