@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
 import SearchFilters from "./SearchFilters";
 import SearchPagination from "./SearchPagination";
 import SearchResults from "./SearchResults";
@@ -11,6 +10,10 @@ import {
   type SearchProduct,
 } from "./types";
 import { resolveProductImage } from "@/utils/resolveProductImage";
+import {
+  readScannerRows,
+  writeScannerRows,
+} from "@/utils/scannerRowStorage";
 import styles from "./CustomSearch.module.css";
 
 type SearchResponse = {
@@ -41,7 +44,6 @@ const toScannerRow = (product: SearchProduct, products: SearchProduct[]) => {
 };
 
 export default function CustomSearch() {
-  const router = useRouter();
   const [filters, setFilters] =
     useState<SearchFiltersState>(initialSearchFilters);
   const [products, setProducts] = useState<SearchProduct[]>([]);
@@ -53,6 +55,7 @@ export default function CustomSearch() {
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState("");
   const [uniqueItemNo, setUniqueItemNo] = useState(false);
+  const [isAddingAll, setIsAddingAll] = useState(false);
 
   const runSearch = useCallback(
     async (targetPage: number, targetPageSize: number) => {
@@ -134,15 +137,7 @@ export default function CustomSearch() {
       return;
     }
 
-    let storedRows: any[] = [];
-
-    try {
-      const storedValue = sessionStorage.getItem("scannerRows");
-      const parsedRows = storedValue ? JSON.parse(storedValue) : [];
-      storedRows = Array.isArray(parsedRows) ? parsedRows : [];
-    } catch {
-      storedRows = [];
-    }
+    const storedRows = readScannerRows();
 
     const existingRows = storedRows.filter(
       (row) => row && (row.barcode || row.qrCode || row.data)
@@ -176,17 +171,24 @@ export default function CustomSearch() {
     }
 
     const newRows = productsForScanner
-      .map((product) => toScannerRow(product, products))
+      .map((product) => toScannerRow(product, productsToAdd))
       .filter(
         (row) =>
           row.barcode &&
           !knownBarcodes.has(row.barcode)
       );
 
-    sessionStorage.setItem(
-      "scannerRows",
-      JSON.stringify([...existingRows, ...newRows, createEmptyScannerRow()])
-    );
+    const stored = writeScannerRows([
+      ...existingRows,
+      ...newRows,
+      createEmptyScannerRow(),
+    ]);
+    if (!stored) {
+      setError(
+        "Too many products were selected for this browser session. Add a smaller batch to Scanner."
+      );
+      return;
+    }
     // router.push("/");
     window.location.href = "/scanner";
   };
@@ -194,6 +196,47 @@ export default function CustomSearch() {
   const selectedProducts = products.filter((product) =>
     selectedIds.has(product._id)
   );
+
+  const loadAllMatchingProducts = async () => {
+    const pageSize = 1000;
+    const createParams = (targetPage: number, includeTotal: boolean) => {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value.trim()) params.set(key, value.trim());
+      });
+      params.set("page", String(targetPage));
+      params.set("pageSize", String(pageSize));
+      if (!includeTotal) params.set("includeTotal", "false");
+      return params;
+    };
+    const fetchPage = async (targetPage: number, includeTotal: boolean) => {
+      const response = await fetch(
+        `/api/custom-search?${createParams(targetPage, includeTotal).toString()}`
+      );
+      const data = (await response.json()) as SearchResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load matching products");
+      }
+      return data;
+    };
+
+    const firstPage = await fetchPage(1, true);
+    const pageCount = Math.ceil(firstPage.total / pageSize);
+    const allProducts = [...firstPage.products];
+
+    for (let page = 2; page <= pageCount; page += 3) {
+      const pageNumbers = Array.from(
+        { length: Math.min(3, pageCount - page + 1) },
+        (_, index) => page + index
+      );
+      const pageResults = await Promise.all(
+        pageNumbers.map((pageNumber) => fetchPage(pageNumber, false))
+      );
+      pageResults.forEach((result) => allProducts.push(...result.products));
+    }
+
+    return allProducts;
+  };
 
   return (
     <>
@@ -248,37 +291,25 @@ export default function CustomSearch() {
             </button> */}
             <button
               className={styles.secondaryButton}
-              disabled={products.length === 0}
+              disabled={products.length === 0 || isAddingAll}
               onClick={async () => {
                 try {
-                  const params = new URLSearchParams();
-
-                  Object.entries(filters).forEach(([key, value]) => {
-                    if (value.trim()) {
-                      params.set(key, value.trim());
-                    }
-                  });
-
-                  params.set("page", "1");
-                  params.set("pageSize", "10000");
-
-                  const response = await fetch(
-                    `/api/custom-search?${params.toString()}`
-                  );
-
-                  const data = await response.json();
-                  console.log("TOTAL:", data.total);
-                  console.log("PRODUCTS LENGTH:", data.products?.length);
-                  console.log(data);
-
-                  addToScanner(data.products || []);
+                  setIsAddingAll(true);
+                  setError("");
+                  addToScanner(await loadAllMatchingProducts());
                 } catch (err) {
                   console.error(err);
-                  alert("Failed to load all products");
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : "Failed to load all products"
+                  );
+                } finally {
+                  setIsAddingAll(false);
                 }
               }}
             >
-              Add All To Scanner
+              {isAddingAll ? "Adding Products..." : "Add All To Scanner"}
             </button>
           </div>
         </div>

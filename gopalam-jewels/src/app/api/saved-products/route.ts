@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 import { requireAuthenticatedUser } from '@/lib/auth';
+import { ensureProductIndexes } from '@/lib/databaseIndexes';
 
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuthenticatedUser();
     if (auth.response) return auth.response;
+    await ensureProductIndexes();
     const client = await clientPromise;
     const db = client.db("gopalamJewels");
     const { searchParams } = request.nextUrl;
@@ -82,6 +84,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuthenticatedUser();
     if (auth.response) return auth.response;
+    await ensureProductIndexes();
     const { products } = await request.json();
 
     if (!products || products.length === 0) {

@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import * as XLSX from "xlsx";
 import { calculateTotals } from "@/utils/calculateTotals";
 import ProductTable from "@/components/productTable";
 import ExcelUpload from "@/components/ExcelUpload";
@@ -10,6 +11,11 @@ import { getFileUploadKey } from "@/utils/cloudinaryDelivery";
 import { uploadProductImage } from "@/utils/uploadProductImage";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
 import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+import {
+  clearScannerRows,
+  readScannerRows,
+  writeScannerRows,
+} from "@/utils/scannerRowStorage";
 
 const createEmptyRow = () => ({
   qrCode: "",
@@ -24,6 +30,58 @@ const normalizeItemNo = (value: unknown) =>
 
 const hasRowImage = (row: any) =>
   Boolean(String(row.imageUrl || row.previewUrl || "").trim());
+
+const isValidProductRow = (row: any) =>
+  Boolean(row.barcode || row.qrCode || row.data);
+
+const getImageFilterStatus = (row: any): "present" | "missing" => {
+  if (row.__imageFilterStatus === "missing") return "missing";
+  return normalizeStoredImageUrl(row.imageUrl) ? "present" : "missing";
+};
+
+const stripDisplayMetadata = (row: any) => {
+  const cleanRow = { ...row };
+  delete cleanRow.__originalIndex;
+  return cleanRow;
+};
+
+const getExcelText = (value: unknown) => String(value ?? "").trim();
+
+const getRowBarcode = (row: any) =>
+  normalizeBarcode(row.barcode || row.data?.BARCODE);
+
+const getRowQRCode = (row: any) => {
+  const existingQRCode = getExcelText(row.qrCode);
+  if (existingQRCode) return existingQRCode;
+
+  const data = row.data || {};
+  return [
+    getRowBarcode(row),
+    data.ITEMNO,
+    data["STONE NAME"],
+    data["GROSS WT"],
+    data["STONE WT"],
+    data["DAI WT"],
+    data["TAG PRICE"],
+    data.SIZE,
+    data.USD,
+  ].map(getExcelText).join(",");
+};
+
+const downloadSingleColumnWorkbook = (
+  header: "BARCODE" | "qrCode",
+  values: string[],
+  filename: string
+) => {
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    [header],
+    ...values.map((value) => [value]),
+  ]);
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+  XLSX.writeFile(workbook, filename, { compression: true });
+};
 
 const getUniqueItemNoRows = (rows: any[]) => {
   const uniqueRows: any[] = [];
@@ -54,12 +112,21 @@ export default function ProductPanel() {
   const [priceDiscountPercent, setPriceDiscountPercent] = useState(0);
   const [usdDiscountPercent, setUsdDiscountPercent] = useState(0);
 
-  const [savedProducts, setSavedProducts] = useState<any[]>([]);
   const lastQRRef = useRef<HTMLInputElement>(null);
   const lastBarcodeRef = useRef<HTMLInputElement>(null);
   const scannerUploadCacheRef = useRef(
     new Map<string, Promise<string>>()
   );
+  const activeImageUploadTasksRef = useRef(new Set<Promise<void>>());
+  const qrLookupCacheRef = useRef(
+    new Map<string, Promise<any>>()
+  );
+  const qrLookupTimeoutsRef = useRef(new Map<number, number>());
+  const qrRowTimeoutsRef = useRef(new Map<number, number>());
+  const qrLookupTasksRef = useRef(new Map<number, Promise<void>>());
+  const scannerRowsSaveTimeoutRef = useRef<number | null>(null);
+  const latestRowsRef = useRef(rows);
+  const isWindowUnloadingRef = useRef(false);
   const previousRowsLengthRef = useRef(rows.length);
   const hasLoadedScannerRowsRef = useRef(false);
   const skipNextScannerRowsSaveRef = useRef(false);
@@ -78,12 +145,9 @@ export default function ProductPanel() {
     useState<"all" | "present" | "missing">("all");
 
   useEffect(() => {
-    fetchSavedProducts();
-  }, []);
-
-  useEffect(() => {
     const clearScannerRowsOnRefresh = () => {
-      sessionStorage.removeItem("scannerRows");
+      isWindowUnloadingRef.current = true;
+      clearScannerRows();
     };
 
     window.addEventListener("beforeunload", clearScannerRowsOnRefresh);
@@ -94,25 +158,18 @@ export default function ProductPanel() {
   }, []);
 
   useEffect(() => {
-    try {
-      const storedRows = sessionStorage.getItem("scannerRows");
+    const storedRows = readScannerRows();
 
-      if (storedRows) {
-        const parsedRows = JSON.parse(storedRows);
-
-        if (Array.isArray(parsedRows) && parsedRows.length > 0) {
-          setRows(parsedRows);
-          previousRowsLengthRef.current = parsedRows.length;
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      hasLoadedScannerRowsRef.current = true;
+    if (storedRows.length > 0) {
+      setRows(storedRows);
+      latestRowsRef.current = storedRows;
+      previousRowsLengthRef.current = storedRows.length;
     }
+    hasLoadedScannerRowsRef.current = true;
   }, []);
 
   useEffect(() => {
+    latestRowsRef.current = rows;
     if (!hasLoadedScannerRowsRef.current) return;
 
     if (skipNextScannerRowsSaveRef.current) {
@@ -120,45 +177,34 @@ export default function ProductPanel() {
       return;
     }
 
-    sessionStorage.setItem("scannerRows", JSON.stringify(rows));
+    if (scannerRowsSaveTimeoutRef.current) {
+      window.clearTimeout(scannerRowsSaveTimeoutRef.current);
+    }
+    scannerRowsSaveTimeoutRef.current = window.setTimeout(() => {
+      writeScannerRows(latestRowsRef.current);
+      scannerRowsSaveTimeoutRef.current = null;
+    }, 250);
+
+    return () => {
+      if (scannerRowsSaveTimeoutRef.current) {
+        window.clearTimeout(scannerRowsSaveTimeoutRef.current);
+        scannerRowsSaveTimeoutRef.current = null;
+      }
+    };
   }, [rows]);
 
-  useEffect(() => {
-    if (savedProducts.length === 0) return;
+  useEffect(() => () => {
+    qrLookupTimeoutsRef.current.forEach((timeout) =>
+      window.clearTimeout(timeout)
+    );
+    qrRowTimeoutsRef.current.forEach((timeout) =>
+      window.clearTimeout(timeout)
+    );
 
-    setRows((currentRows) => {
-      const lookupProducts = [...currentRows, ...savedProducts];
-      let changed = false;
-
-      const nextRows = currentRows.map((row) => {
-        if (row.imageUrl || row.previewUrl) return row;
-
-        const resolvedImage = resolveProductImage(row, lookupProducts);
-        if (!resolvedImage) return row;
-
-        changed = true;
-        return {
-          ...row,
-          imageUrl: resolvedImage,
-          previewUrl: resolvedImage,
-        };
-      });
-
-      return changed ? nextRows : currentRows;
-    });
-  }, [rows, savedProducts]);
-
-  const fetchSavedProducts = async () => {
-    try {
-      const res = await fetch("/api/saved-products");
-      if (res.ok) {
-        const data = await res.json();
-        setSavedProducts(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.error(err);
+    if (!isWindowUnloadingRef.current && hasLoadedScannerRowsRef.current) {
+      writeScannerRows(latestRowsRef.current);
     }
-  };
+  }, []);
 
   const parseQRCode = (fullString: string) => {
     const parts = fullString.split(",").map(p => p.trim());
@@ -175,53 +221,130 @@ export default function ProductPanel() {
     };
   };
 
+  const lookupQRProduct = async (
+    index: number,
+    qrValue: string,
+    parsed: ReturnType<typeof parseQRCode>
+  ) => {
+    const barcode = normalizeBarcode(parsed.BARCODE);
+    const itemNo = normalizeItemNo(parsed.ITEMNO);
+    const cacheKey = `${barcode}|${itemNo}`;
+
+    try {
+      if (!qrLookupCacheRef.current.has(cacheKey)) {
+        qrLookupCacheRef.current.set(
+          cacheKey,
+          fetch("/api/saved-products/lookup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              barcodes: barcode ? [barcode] : [],
+              itemNos: itemNo ? [itemNo] : [],
+            }),
+          }).then(async (response) => {
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.error || "QR lookup failed");
+            }
+            return data;
+          })
+        );
+      }
+
+      const lookupData = await qrLookupCacheRef.current.get(cacheKey)!;
+      const matchedProducts = Array.isArray(lookupData.products)
+        ? lookupData.products
+        : [];
+      const match = matchedProducts.find(
+        (product: any) => normalizeBarcode(product.barcode) === barcode
+      );
+      const fallbackProduct = {
+        barcode,
+        data: parsed,
+        imageCatalogueImage: lookupData.itemImages?.[itemNo] || "",
+      };
+      const matchedImage = resolveProductImage(
+        match || fallbackProduct,
+        matchedProducts
+      );
+
+      setRows((currentRows) =>
+        currentRows.map((row, currentIndex) =>
+          currentIndex === index && row.qrCode === qrValue
+            ? {
+                ...row,
+                barcode: normalizeBarcode(match?.barcode || barcode),
+                data: match?.data || parsed,
+                imageUrl: matchedImage,
+                previewUrl: matchedImage,
+              }
+            : row
+        )
+      );
+    } catch (error) {
+      qrLookupCacheRef.current.delete(cacheKey);
+      console.error("QR lookup failed:", error);
+    }
+  };
+
   const handleQRScan = (index: number, value: string) => {
-    const updated = [...rows];
-    updated[index].qrCode = value;
-    let match = null;
+    const updated = rows.map((row, currentIndex) =>
+      currentIndex === index ? { ...row, qrCode: value } : row
+    );
     // Only process when we have a full QR code (at least 6-7 parts)
     const parts = value.split(",").map(p => p.trim());
 
-    // Check saved products first (MongoDB)
-    if (value.includes(",")) {
-      const barcode = value.split(",")[0].trim();
-      match = savedProducts.find(p => String(p.barcode).trim() === barcode);
-    }
-
-    if (match) {
-      // ✅ Load saved data + image
-      const matchedImage = resolveProductImage(match, savedProducts);
-      updated[index].barcode = match.barcode;
-      updated[index].data = match.data;
-      updated[index].imageUrl = matchedImage;
-      updated[index].previewUrl = matchedImage;
-    } else if (parts.length >= 6) {   // Increased threshold for safety
+    if (parts.length >= 6) {
       const parsed = parseQRCode(value);
-      const matchedImage = resolveProductImage(
-        { barcode: parsed.BARCODE, data: parsed },
-        savedProducts
-      );
       updated[index].barcode = parsed.BARCODE;
       updated[index].data = parsed;
-      updated[index].imageUrl = matchedImage;
-      updated[index].previewUrl = matchedImage;
+      updated[index].imageUrl = "";
+      updated[index].previewUrl = "";
 
+      const previousLookup = qrLookupTimeoutsRef.current.get(index);
+      if (previousLookup) window.clearTimeout(previousLookup);
+      qrLookupTimeoutsRef.current.set(
+        index,
+        window.setTimeout(() => {
+          qrLookupTimeoutsRef.current.delete(index);
+          const lookupTask = lookupQRProduct(index, value, parsed);
+          qrLookupTasksRef.current.set(index, lookupTask);
+          lookupTask.finally(() => {
+            if (qrLookupTasksRef.current.get(index) === lookupTask) {
+              qrLookupTasksRef.current.delete(index);
+            }
+          });
+        }, 120)
+      );
     } else {
       // Partial input - just update QR, don't parse or add row
       updated[index].barcode = "";
       updated[index].data = null;
+      updated[index].imageUrl = "";
+      updated[index].previewUrl = "";
+      const previousLookup = qrLookupTimeoutsRef.current.get(index);
+      if (previousLookup) {
+        window.clearTimeout(previousLookup);
+        qrLookupTimeoutsRef.current.delete(index);
+      }
     }
     setFocusField("qr");
     // Auto add new row only after full valid scan
     if (index === rows.length - 1 && value.includes(",") && value.split(",").length >= 4) {
-      setTimeout(() => {
-        setRows((prevRows) => {
-          if (prevRows.length === index + 1) {
-            return [...prevRows, createEmptyRow()];
-          }
-          return prevRows;
-        });
-      }, 1000);
+      const previousRowTimeout = qrRowTimeoutsRef.current.get(index);
+      if (previousRowTimeout) window.clearTimeout(previousRowTimeout);
+      qrRowTimeoutsRef.current.set(
+        index,
+        window.setTimeout(() => {
+          qrRowTimeoutsRef.current.delete(index);
+          setRows((prevRows) => {
+            if (prevRows.length === index + 1) {
+              return [...prevRows, createEmptyRow()];
+            }
+            return prevRows;
+          });
+        }, 1000)
+      );
     }
 
     setRows(updated);
@@ -304,7 +427,6 @@ export default function ProductPanel() {
 
         const matchedImage = resolveProductImage(match, [
           match,
-          ...savedProducts,
         ]);
         nextRows[index] = {
           ...currentRow,
@@ -329,11 +451,28 @@ export default function ProductPanel() {
     if (!file) return;
     const previewUrl = URL.createObjectURL(file);
 
-    const updated = [...rows];
-    updated[index].previewUrl = previewUrl;
-    setRows(updated);
+    setRows((currentRows) => {
+      const nextRows = currentRows.map((row, currentIndex) =>
+        currentIndex === index
+          ? {
+              ...row,
+              previewUrl,
+              __imageFilterStatus:
+                imageFilter === "missing"
+                  ? "missing"
+                  : row.__imageFilterStatus,
+            }
+          : row
+      );
+      latestRowsRef.current = nextRows;
+      return nextRows;
+    });
 
-    uploadImage(file, index, previewUrl);
+    const uploadTask = uploadImage(file, index, previewUrl);
+    activeImageUploadTasksRef.current.add(uploadTask);
+    uploadTask.finally(() => {
+      activeImageUploadTasksRef.current.delete(uploadTask);
+    });
   };
 
   const uploadImage = async (
@@ -356,13 +495,15 @@ export default function ProductPanel() {
       }
 
       const imageUrl = await scannerUploadCacheRef.current.get(uploadKey)!;
-      setRows((currentRows) =>
-        currentRows.map((currentRow, currentIndex) =>
-          currentIndex === index && currentRow.previewUrl === previewUrl
+      setRows((currentRows) => {
+        const nextRows = currentRows.map((currentRow) =>
+          currentRow.previewUrl === previewUrl
             ? { ...currentRow, imageUrl }
             : currentRow
-        )
-      );
+        );
+        latestRowsRef.current = nextRows;
+        return nextRows;
+      });
     } catch (err) {
       scannerUploadCacheRef.current.delete(uploadKey);
       console.error(err);
@@ -370,15 +511,25 @@ export default function ProductPanel() {
   };
 
   const saveAll = async (rowsToSave: any[] = rows) => {
+    if (activeImageUploadTasksRef.current.size > 0) {
+      await Promise.allSettled([...activeImageUploadTasksRef.current]);
+    }
+    if (qrLookupTimeoutsRef.current.size > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    }
+    if (qrLookupTasksRef.current.size > 0) {
+      await Promise.allSettled([...qrLookupTasksRef.current.values()]);
+    }
 
-    console.log(
-      rows.map(r => ({
-        barcode: r.barcode,
-        imageUrl: r.imageUrl
-      }))
+    const latestRowsByBarcode = new Map(
+      latestRowsRef.current
+        .filter((row) => normalizeBarcode(row.barcode))
+        .map((row) => [normalizeBarcode(row.barcode), row])
     );
-    
-    const toSave = rowsToSave.filter(r => r.barcode && r.data).map(r => ({
+    const currentRowsToSave = rowsToSave.map(
+      (row) => latestRowsByBarcode.get(normalizeBarcode(row.barcode)) || row
+    );
+    const toSave = currentRowsToSave.filter(r => r.barcode && r.data).map(r => ({
       barcode: r.barcode,
       image: r.imageUrl || "",
       data: r.data,
@@ -395,7 +546,31 @@ export default function ProductPanel() {
 
       if (res.ok) {
         alert(`✅ ${toSave.length} products saved!`);
-        fetchSavedProducts();
+        const savedImageBarcodes = new Set(
+          toSave
+            .filter((product) => normalizeStoredImageUrl(product.image))
+            .map((product) => normalizeBarcode(product.barcode))
+        );
+
+        if (savedImageBarcodes.size > 0) {
+          setRows((currentRows) => {
+            const nextRows = currentRows.map((row) => {
+              if (
+                row.__imageFilterStatus !== "missing" ||
+                !savedImageBarcodes.has(normalizeBarcode(row.barcode)) ||
+                !normalizeStoredImageUrl(row.imageUrl)
+              ) {
+                return row;
+              }
+
+              const updatedRow = { ...row };
+              delete updatedRow.__imageFilterStatus;
+              return updatedRow;
+            });
+            latestRowsRef.current = nextRows;
+            return nextRows;
+          });
+        }
       }
     } catch (err) {
       alert("Save failed");
@@ -416,43 +591,76 @@ export default function ProductPanel() {
   });
 
   const [showPopup, setShowPopup] = useState(false);
-  const isValidProductRow = (row: any) =>
-    Boolean(row.barcode || row.qrCode || row.data);
-
-  const validProductRows = rows.filter(isValidProductRow);
+  const validProductRows = useMemo(
+    () => rows.filter(isValidProductRow),
+    [rows]
+  );
   const allProductsCount = validProductRows.length;
-  const imagesPresentCount = validProductRows.filter((row) =>
-    normalizeStoredImageUrl(row.imageUrl)
+  const imagesPresentCount = validProductRows.filter(
+    (row) => getImageFilterStatus(row) === "present"
   ).length;
   const imagesMissingCount = validProductRows.filter(
-    (row) => !normalizeStoredImageUrl(row.imageUrl)
+    (row) => getImageFilterStatus(row) === "missing"
   ).length;
 
-  const filteredRows = rows
-    .map((row, originalIndex) => ({ ...row, __originalIndex: originalIndex }))
-    .filter((row) => {
-      if (!isValidProductRow(row)) return true;
-      if (imageFilter === "present") {
-        return Boolean(normalizeStoredImageUrl(row.imageUrl));
-      }
-      if (imageFilter === "missing") {
-        return !normalizeStoredImageUrl(row.imageUrl);
-      }
-      return true;
-    });
+  const filteredRows = useMemo(
+    () => rows
+      .map((row, originalIndex) => ({ ...row, __originalIndex: originalIndex }))
+      .filter((row) => {
+        if (!isValidProductRow(row)) return true;
+        if (imageFilter === "present") {
+          return getImageFilterStatus(row) === "present";
+        }
+        if (imageFilter === "missing") {
+          return getImageFilterStatus(row) === "missing";
+        }
+        return true;
+      }),
+    [imageFilter, rows]
+  );
+
+  const missingRowsForExcel = useMemo(
+    () => validProductRows.filter((row) =>
+      getImageFilterStatus(row) === "missing" && Boolean(getRowBarcode(row))
+    ),
+    [validProductRows]
+  );
+
+  const downloadMissingBarcodeExcel = () => {
+    const barcodes = missingRowsForExcel
+      .map(getRowBarcode);
+
+    downloadSingleColumnWorkbook(
+      "BARCODE",
+      barcodes,
+      "products-missing-images-barcodes.xlsx"
+    );
+  };
+
+  const downloadMissingQRCodeExcel = () => {
+    const qrCodes = missingRowsForExcel
+      .map(getRowQRCode);
+
+    downloadSingleColumnWorkbook(
+      "qrCode",
+      qrCodes,
+      "products-missing-images-qr-codes.xlsx"
+    );
+  };
 
   const getOriginalRowIndex = (displayIndex: number) =>
     filteredRows[displayIndex]?.__originalIndex ?? displayIndex;
 
-  const stripDisplayMetadata = (row: any) => {
-    const { __originalIndex, ...cleanRow } = row;
-    return cleanRow;
-  };
-
-  const preparedPdfRows = filteredRows.map(stripDisplayMetadata);
-  const pdfRowsPreview = uniqueItemNoForPDF || pdfVersion === "version5"
-    ? getUniqueItemNoRows(preparedPdfRows)
-    : preparedPdfRows;
+  const preparedPdfRows = useMemo(
+    () => filteredRows.map(stripDisplayMetadata),
+    [filteredRows]
+  );
+  const pdfRowsPreview = useMemo(
+    () => uniqueItemNoForPDF || pdfVersion === "version5"
+      ? getUniqueItemNoRows(preparedPdfRows)
+      : preparedPdfRows,
+    [pdfVersion, preparedPdfRows, uniqueItemNoForPDF]
+  );
 
   const clampDiscountPercent = (value: string) => {
     if (value.trim() === "") return 0;
@@ -534,7 +742,7 @@ export default function ProductPanel() {
     if (!confirmed) return;
 
     skipNextScannerRowsSaveRef.current = true;
-    sessionStorage.removeItem("scannerRows");
+    clearScannerRows();
     setImageFilter("all");
     setRows([createEmptyRow()]);
   };
@@ -545,10 +753,13 @@ export default function ProductPanel() {
     { key: "missing", label: `Images Missing (${imagesMissingCount})` },
   ] as const;
 
-  const totals = calculateTotals(
-    filteredRows,
-    priceDiscountPercent,
-    usdDiscountPercent
+  const totals = useMemo(
+    () => calculateTotals(
+      filteredRows,
+      priceDiscountPercent,
+      usdDiscountPercent
+    ),
+    [filteredRows, priceDiscountPercent, usdDiscountPercent]
   );
   return (
     <div>
@@ -567,7 +778,7 @@ export default function ProductPanel() {
 
         {/* <div>
           <h3>Excel Upload</h3>
-          <ExcelUpload setRows={setRows} savedProducts={savedProducts} />
+          <ExcelUpload setRows={setRows} />
         </div> */}
 
         <div
@@ -581,7 +792,6 @@ export default function ProductPanel() {
             <h3>Barcode Excel</h3>
             <ExcelUpload
               setRows={setRows}
-              savedProducts={savedProducts}
             />
           </div>
 
@@ -589,7 +799,6 @@ export default function ProductPanel() {
             <h3>QR Excel</h3>
             <QRCodeExcelUpload
               setRows={setRows}
-              savedProducts={savedProducts}
             />
           </div>
         </div>
@@ -640,6 +849,54 @@ export default function ProductPanel() {
             }}
           />
         </label>
+        {imageFilter === "missing" && (
+          <>
+            <button
+              type="button"
+              onClick={downloadMissingBarcodeExcel}
+              disabled={missingRowsForExcel.length === 0}
+              style={{
+                backgroundColor: "#3b82f6",
+                color: "white",
+                padding: "7px 12px",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: missingRowsForExcel.length === 0
+                  ? "not-allowed"
+                  : "pointer",
+                opacity: missingRowsForExcel.length === 0 ? 0.6 : 1,
+                minHeight: "32px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Download Barcode Excel
+            </button>
+            <button
+              type="button"
+              onClick={downloadMissingQRCodeExcel}
+              disabled={missingRowsForExcel.length === 0}
+              style={{
+                backgroundColor: "#3b82f6",
+                color: "white",
+                padding: "7px 12px",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: missingRowsForExcel.length === 0
+                  ? "not-allowed"
+                  : "pointer",
+                opacity: missingRowsForExcel.length === 0 ? 0.6 : 1,
+                minHeight: "32px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Download QR Excel
+            </button>
+          </>
+        )}
       </div>
 
       <ProductTable

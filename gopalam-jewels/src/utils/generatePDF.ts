@@ -15,28 +15,37 @@ import {
 
 const compressImage = async (src: string, quality = 0.5, maxWidth = 600) => {
     const response = await fetch(src);
+    if (!response.ok) {
+        throw new Error(`Image request failed with status ${response.status}`);
+    }
     const blob = await response.blob();
 
-    return new Promise<string>((resolve) => {
+    return new Promise<string>((resolve, reject) => {
         const img = new Image();
-        img.src = URL.createObjectURL(blob);
+        const objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
 
         img.onload = () => {
             const canvas = document.createElement("canvas");
-            const scale = maxWidth / img.width;
+            const scale = Math.min(1, maxWidth / img.width);
 
-            canvas.width = maxWidth;
-            canvas.height = img.height * scale;
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
 
             const ctx = canvas.getContext("2d");
             ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+            URL.revokeObjectURL(objectUrl);
             resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error("Image could not be decoded"));
         };
     });
 };
 
-const version1ImageCache = new Map<string, Promise<string>>();
+const version1ImageCache = new Map<string, Promise<string | null>>();
 
 const getVersion1Image = (source: string) => {
     const optimizedSource = buildCloudinaryDeliveryUrl(
@@ -48,7 +57,14 @@ const getVersion1Image = (source: string) => {
     return getOrCreateBoundedCacheEntry(
         version1ImageCache,
         cacheKey,
-        () => compressImage(optimizedSource, 0.5, 600)
+        async () => {
+            try {
+                return await compressImage(optimizedSource, 0.5, 600);
+            } catch (error) {
+                console.error(error);
+                return null;
+            }
+        }
     );
 };
 
@@ -252,16 +268,18 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         if (imgSrc && selectedFields.image) {
             compressedImg = await getVersion1Image(imgSrc);
 
-            pdf.addImage(
-                compressedImg,
-                "JPEG",
-                colX["image"] - 2,
-                y,
-                colWidthMap["image"],   // 🔥 dynamic width
-                dynamicHeight,
-                `img_${i}`,
-                "FAST"
-            );
+            if (compressedImg) {
+                pdf.addImage(
+                    compressedImg,
+                    "JPEG",
+                    colX["image"] - 2,
+                    y,
+                    colWidthMap["image"],   // 🔥 dynamic width
+                    dynamicHeight,
+                    `img_${i}`,
+                    "FAST"
+                );
+            }
         }
 
         const lineHeight = 5;
@@ -333,4 +351,5 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
 
     onProgress?.(100);
     pdf.save("products.pdf");
+    version1ImageCache.clear();
 };

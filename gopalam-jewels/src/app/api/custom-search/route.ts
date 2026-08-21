@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Document, Filter } from "mongodb";
 import clientPromise from "@/lib/mongodb";
 import { requireAuthenticatedUser } from "@/lib/auth";
+import { ensureProductIndexes } from "@/lib/databaseIndexes";
 
 const textFieldMap = {
   barcode: "barcode",
@@ -29,8 +30,6 @@ const ensureIndexes = async () => {
       const collection = client.db("gopalamJewels").collection("savedProducts");
 
       await Promise.all([
-        collection.createIndex({ barcode: 1 }, { name: "barcode_search" }),
-        collection.createIndex({ "data.ITEMNO": 1 }, { name: "item_no_search" }),
         collection.createIndex(
           { "data.STONE NAME": 1 },
           { name: "stone_search" }
@@ -65,11 +64,12 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuthenticatedUser();
     if (auth.response) return auth.response;
-    await ensureIndexes();
+    await Promise.all([ensureIndexes(), ensureProductIndexes()]);
 
     const { searchParams } = request.nextUrl;
     const requestedPage = Number(searchParams.get("page")) || 1;
     const requestedPageSize = Number(searchParams.get("pageSize")) || 25;
+    const includeTotal = searchParams.get("includeTotal") !== "false";
     const page = Math.max(1, requestedPage);
 
     const pageSize =
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
     const db = client.db("gopalamJewels");
     const collection = db.collection("savedProducts");
     const [total, products] = await Promise.all([
-      collection.countDocuments(query),
+      includeTotal ? collection.countDocuments(query) : Promise.resolve(0),
       collection
         .find(query)
         .sort({ barcode: 1 })

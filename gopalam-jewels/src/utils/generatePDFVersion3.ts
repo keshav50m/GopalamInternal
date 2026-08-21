@@ -140,6 +140,10 @@ const loadImage = async (
       new Promise<LoadedImage | null>(async (resolve) => {
         try {
           const response = await fetch(src);
+          if (!response.ok) {
+            resolve(null);
+            return;
+          }
           const blob = await response.blob();
           const objectUrl = URL.createObjectURL(blob);
           const image = new Image();
@@ -462,4 +466,5 @@ export const generatePDFVersion3 = async (
 
   onProgress?.(100);
   pdf.save(`${filenamePrefix}Gopalam_Catalogue_Version_3_${fileDate(generatedAt)}.pdf`);
+  version3ImageCache.clear();
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent, useRef } from "react";
+import { useState, useRef } from "react";
 import styles from "./ImageCatalogue.module.css";
 import { uploadProductImage } from "@/utils/uploadProductImage";
 import {
@@ -47,11 +47,13 @@ export default function ImageCatalogueUpload() {
   const [imageFilter, setImageFilter] = useState<ImageFilter>("all");
   const barcodeRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const saveImageCatalogueItem = async (itemNo: string, image: string) => {
+  const saveImageCatalogueItems = async (
+    items: { itemNo: string; image: string }[]
+  ) => {
     const res = await fetch("/api/image-catalogue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemNo, image }),
+      body: JSON.stringify({ items }),
     });
 
     const data = await res.json();
@@ -347,6 +349,7 @@ export default function ImageCatalogueUpload() {
         (row) => row.itemNo.trim()
       );
       const uploadCache = new Map<string, Promise<string>>();
+      const itemsToSave: { itemNo: string; image: string }[] = [];
 
       for (const row of validRows) {
         let imageUrl = row.previewUrl;
@@ -376,11 +379,13 @@ export default function ImageCatalogueUpload() {
           });
         }
 
-        await saveImageCatalogueItem(
-          row.itemNo.trim(),
-          imageUrl
-        );
+        itemsToSave.push({
+          itemNo: row.itemNo.trim(),
+          image: imageUrl,
+        });
       }
+
+      await saveImageCatalogueItems(itemsToSave);
 
       setMessage(`${validRows.length} image${validRows.length === 1 ? "" : "s"} uploaded successfully.`);
     } catch (err) {

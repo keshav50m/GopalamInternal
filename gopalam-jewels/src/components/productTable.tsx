@@ -63,7 +63,13 @@ export default function ProductTable({
 
       <tbody>
         {rows.map((row: any, i: number) => (
-          <tr key={i}>
+          <tr
+            key={i}
+            style={{
+              contentVisibility: "auto",
+              containIntrinsicSize: "140px",
+            }}
+          >
 
             {/* IMAGE */}
             <td>

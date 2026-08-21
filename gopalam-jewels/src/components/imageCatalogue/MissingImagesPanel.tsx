@@ -18,6 +18,12 @@ type MissingProduct = {
   uploadedUrl?: string;
 };
 
+type MissingProductImage = {
+  barcode: string | number;
+  itemNo: string;
+  image: string;
+};
+
 export default function MissingImagesPanel() {
   const [limit, setLimit] = useState(50);
   const [products, setProducts] = useState<MissingProduct[]>([]);
@@ -77,10 +83,10 @@ export default function MissingImagesPanel() {
     setError("");
   };
 
-  const persistProductImage = async (
+  const prepareProductImage = async (
     product: MissingProduct,
     uploadCache = new Map<string, Promise<string>>()
-  ) => {
+  ): Promise<MissingProductImage> => {
     if (!product.file && !product.uploadedUrl) {
       throw new Error(`Select an image for Item No ${product.itemNo || "unknown"}`);
     }
@@ -124,20 +130,40 @@ export default function MissingImagesPanel() {
       );
     }
 
+    return {
+      barcode: product.barcode,
+      itemNo: product.itemNo,
+      image,
+    };
+  };
+
+  const saveProductImages = async (
+    items: MissingProductImage[],
+    batch = false
+  ) => {
+    const body = batch
+      ? { items }
+      : items[0];
     const response = await fetch("/api/missing-products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        barcode: product.barcode,
-        itemNo: product.itemNo,
-        image,
-      }),
+      body: JSON.stringify(body),
     });
     const data = await response.json();
 
     if (!response.ok) {
       throw new Error(data.error || "Unable to save product image");
     }
+
+    return data;
+  };
+
+  const persistProductImage = async (
+    product: MissingProduct,
+    uploadCache = new Map<string, Promise<string>>()
+  ) => {
+    const item = await prepareProductImage(product, uploadCache);
+    await saveProductImages([item]);
   };
 
   const handleSave = async (product: MissingProduct) => {
@@ -180,17 +206,52 @@ export default function MissingImagesPanel() {
     const successfulIds: string[] = [];
     const failures: string[] = [];
     const uploadCache = new Map<string, Promise<string>>();
+    const preparedItems: {
+      product: MissingProduct;
+      item: MissingProductImage;
+    }[] = [];
 
     for (const product of selectedProducts) {
       try {
-        await persistProductImage(product, uploadCache);
-        successfulIds.push(product._id);
+        preparedItems.push({
+          product,
+          item: await prepareProductImage(product, uploadCache),
+        });
       } catch (saveError) {
         failures.push(
           `${product.itemNo || product.barcode}: ${
             saveError instanceof Error ? saveError.message : "Upload failed"
           }`
         );
+      }
+    }
+
+    if (preparedItems.length > 0) {
+      try {
+        const result = await saveProductImages(
+          preparedItems.map(({ item }) => item),
+          true
+        );
+        const savedBarcodes = new Set(
+          (Array.isArray(result.savedBarcodes) ? result.savedBarcodes : [])
+            .map((barcode: unknown) => String(barcode || "").trim())
+        );
+
+        preparedItems.forEach(({ product }) => {
+          if (savedBarcodes.has(String(product.barcode || "").trim())) {
+            successfulIds.push(product._id);
+          } else {
+            failures.push(`${product.itemNo || product.barcode}: saved product was not found`);
+          }
+        });
+      } catch (saveError) {
+        preparedItems.forEach(({ product }) => {
+          failures.push(
+            `${product.itemNo || product.barcode}: ${
+              saveError instanceof Error ? saveError.message : "Save failed"
+            }`
+          );
+        });
       }
     }
 

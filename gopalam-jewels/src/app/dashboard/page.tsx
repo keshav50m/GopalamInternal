@@ -1,24 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardCharts from "@/components/dashboard/DashboardCharts";
 import DashboardSearch from "@/components/dashboard/DashboardSearch";
 import DashboardStats from "@/components/dashboard/DashboardStats";
 import DashboardTables from "@/components/dashboard/DashboardTables";
-import type { SavedProduct } from "@/components/dashboard/types";
-import {
-  buildStats,
-  buildStoneDistribution,
-  buildUploadTrend,
-  hasImage,
-  sortByRecentUpload,
-} from "@/components/dashboard/dashboardUtils";
+import type { DashboardData } from "@/components/dashboard/types";
 import styles from "@/components/dashboard/Dashboard.module.css";
 import AdminButton from "@/components/AdminButton";
 
 export default function DashboardPage() {
-  const [products, setProducts] = useState<SavedProduct[]>([]);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -28,13 +21,13 @@ export default function DashboardPage() {
         setLoading(true);
         setError("");
 
-        const response = await fetch("/api/saved-products");
+        const response = await fetch("/api/dashboard");
         if (!response.ok) {
           throw new Error("Unable to load saved products");
         }
 
-        const data = await response.json();
-        setProducts(Array.isArray(data) ? data : []);
+        const data = (await response.json()) as DashboardData & { error?: string };
+        setDashboardData(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load saved products");
       } finally {
@@ -45,14 +38,13 @@ export default function DashboardPage() {
     fetchProducts();
   }, []);
 
-  const stats = useMemo(() => buildStats(products), [products]);
-  const stoneDistribution = useMemo(() => buildStoneDistribution(products), [products]);
-  const uploadTrend = useMemo(() => buildUploadTrend(products), [products]);
-  const missingImages = useMemo(
-    () => sortByRecentUpload(products.filter((product) => !hasImage(product))),
-    [products]
-  );
-  const recentUploads = useMemo(() => sortByRecentUpload(products), [products]);
+  const stats = dashboardData?.stats || {
+    totalProducts: 0,
+    productsWithImages: 0,
+    productsMissingImages: 0,
+    todaysUploads: 0,
+    uploadsThisMonth: 0,
+  };
 
   return (
     <main className={styles.dashboardShell}>
@@ -86,9 +78,15 @@ export default function DashboardPage() {
         {error ? <div className={styles.errorBox}>{error}</div> : null}
 
         <DashboardStats stats={stats} />
-        <DashboardCharts stoneDistribution={stoneDistribution} uploadTrend={uploadTrend} />
-        <DashboardSearch products={products} />
-        <DashboardTables missingImages={missingImages} recentUploads={recentUploads} />
+        <DashboardCharts
+          stoneDistribution={dashboardData?.stoneDistribution || []}
+          uploadTrend={dashboardData?.uploadTrend || []}
+        />
+        <DashboardSearch />
+        <DashboardTables
+          missingImages={dashboardData?.missingImages || []}
+          recentUploads={dashboardData?.recentUploads || []}
+        />
       </div>
     </main>
   );

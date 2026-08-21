@@ -1,25 +1,49 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { SavedProduct } from "./types";
 import { formatDisplayDate, getBarcode, getStoneName } from "./dashboardUtils";
 import styles from "./Dashboard.module.css";
 
-type Props = {
-  products: SavedProduct[];
-};
-
-export default function DashboardSearch({ products }: Props) {
+export default function DashboardSearch() {
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SavedProduct[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const results = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return [];
+  useEffect(() => {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
 
-    return products
-      .filter((product) => getBarcode(product).toLowerCase().includes(normalizedQuery))
-      .slice(0, 10);
-  }, [products, query]);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(
+          `/api/dashboard?barcode=${encodeURIComponent(normalizedQuery)}`,
+          { signal: controller.signal }
+        );
+        const data = await response.json();
+        if (response.ok) {
+          setResults(Array.isArray(data.products) ? data.products : []);
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [query]);
 
   return (
     <section className={styles.panel}>
@@ -34,9 +58,11 @@ export default function DashboardSearch({ products }: Props) {
         placeholder="Search barcode"
       />
 
-      {query.trim() && results.length === 0 ? (
+      {query.trim() && !loading && results.length === 0 ? (
         <div className={styles.emptyState}>No matching barcode found</div>
       ) : null}
+
+      {loading ? <div className={styles.emptyState}>Searching...</div> : null}
 
       {results.length > 0 ? (
         <div className={styles.tableWrap}>

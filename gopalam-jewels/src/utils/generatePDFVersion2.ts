@@ -130,6 +130,10 @@ const loadImage = async (
       new Promise<LoadedImage | null>(async (resolve) => {
         try {
           const response = await fetch(src);
+          if (!response.ok) {
+            resolve(null);
+            return;
+          }
           const blob = await response.blob();
           const objectUrl = URL.createObjectURL(blob);
 
@@ -360,4 +364,5 @@ export const generatePDFVersion2 = async (
 
   onProgress?.(100);
   pdf.save("products-catalogue.pdf");
+  version2ImageCache.clear();
 };

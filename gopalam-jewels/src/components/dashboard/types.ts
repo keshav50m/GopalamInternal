@@ -26,6 +26,14 @@ export type DashboardStats = {
   uploadsThisMonth: number;
 };
 
+export type DashboardData = {
+  stats: DashboardStats;
+  stoneDistribution: ChartPoint[];
+  uploadTrend: ChartPoint[];
+  missingImages: SavedProduct[];
+  recentUploads: SavedProduct[];
+};
+
 export type ChartPoint = {
   label: string;
   value: number;

@@ -112,6 +112,10 @@ const loadImage = (
   const pendingImage = new Promise<LoadedImage | null>(async (resolve) => {
     try {
       const response = await fetch(source);
+      if (!response.ok) {
+        resolve(null);
+        return;
+      }
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       const image = new Image();

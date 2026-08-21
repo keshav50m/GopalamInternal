@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuthenticatedUser } from "@/lib/auth";
+import { ensureProductIndexes } from "@/lib/databaseIndexes";
+import { findCatalogueImagesByItemNos } from "@/lib/imageCatalogueQueries";
 import clientPromise from "@/lib/mongodb";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
+import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
 
 const BARCODE_QUERY_BATCH_SIZE = 1000;
+const normalizeItemNo = (value: unknown) =>
+  String(value ?? "").trim().toUpperCase();
 
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuthenticatedUser();
     if (auth.response) return auth.response;
+    await ensureProductIndexes();
 
     const body = await request.json();
     const barcodes = Array.from(
@@ -19,10 +25,17 @@ export async function POST(request: NextRequest) {
           .filter(Boolean)
       )
     );
+    const requestedItemNos = Array.from(
+      new Set(
+        (Array.isArray(body.itemNos) ? body.itemNos : [])
+          .map(normalizeItemNo)
+          .filter(Boolean)
+      )
+    );
 
-    if (barcodes.length === 0) {
+    if (barcodes.length === 0 && requestedItemNos.length === 0) {
       return NextResponse.json(
-        { error: "At least one barcode is required" },
+        { error: "At least one barcode or Item No is required" },
         { status: 400 }
       );
     }
@@ -36,6 +49,7 @@ export async function POST(request: NextRequest) {
       const matchedProducts = await db
         .collection("savedProducts")
         .find({ barcode: { $in: barcodeBatch } })
+        .project({ barcode: 1, image: 1, data: 1, updatedAt: 1 })
         .toArray();
 
       products.push(...matchedProducts);
@@ -43,32 +57,54 @@ export async function POST(request: NextRequest) {
 
     const itemNos = Array.from(
       new Set(
-        products
-          .map((product: any) => String(product.data?.ITEMNO || "").trim())
-          .filter(Boolean)
+        [
+          ...requestedItemNos,
+          ...products
+            .filter((product: any) => !normalizeStoredImageUrl(product.image))
+            .map((product: any) => normalizeItemNo(product.data?.ITEMNO)),
+        ].filter(Boolean)
       )
     );
-    const catalogueItems = itemNos.length
-      ? await db
-          .collection("imageCatalogue")
-          .find({ itemNo: { $in: itemNos } })
-          .toArray()
-      : [];
+    const [catalogueItems, relatedProducts] = itemNos.length
+      ? await Promise.all([
+          findCatalogueImagesByItemNos(
+            db.collection("imageCatalogue"),
+            itemNos
+          ),
+          db
+            .collection("savedProducts")
+            .find({ "data.ITEMNO": { $in: itemNos } })
+            .project({ barcode: 1, image: 1, data: 1 })
+            .toArray(),
+        ])
+      : [[], []];
     const imageByItemNo = new Map(
       catalogueItems.map((item: any) => [
-        String(item.itemNo || "").trim(),
-        item.image || "",
+        normalizeItemNo(item.itemNo),
+        normalizeStoredImageUrl(item.image),
       ])
     );
+    const itemNosWithSavedImages = new Set<string>();
+    relatedProducts.forEach((product: any) => {
+      const itemNo = normalizeItemNo(product.data?.ITEMNO);
+      const image = normalizeStoredImageUrl(product.image);
+      if (itemNo && image && !itemNosWithSavedImages.has(itemNo)) {
+        imageByItemNo.set(itemNo, image);
+        itemNosWithSavedImages.add(itemNo);
+      }
+    });
+
+    const itemImages = Object.fromEntries(imageByItemNo);
 
     return NextResponse.json({
       products: products.map((product: any) => {
-        const itemNo = String(product.data?.ITEMNO || "").trim();
+        const itemNo = normalizeItemNo(product.data?.ITEMNO);
         return {
           ...product,
           imageCatalogueImage: imageByItemNo.get(itemNo) || "",
         };
       }),
+      itemImages,
     });
   } catch (error) {
     console.error("Barcode lookup failed:", error);

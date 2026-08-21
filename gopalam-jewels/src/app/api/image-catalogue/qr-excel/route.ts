@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import clientPromise from "@/lib/mongodb";
 import { requireAuthenticatedUser } from "@/lib/auth";
+import { ensureProductIndexes } from "@/lib/databaseIndexes";
+import { findCatalogueImagesByItemNos } from "@/lib/imageCatalogueQueries";
 import {
   buildCatalogueImageMap,
   buildProductsByItemNo,
@@ -17,9 +19,6 @@ type QRUploadRow = {
 
 const normalizeHeader = (value: unknown) =>
   String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-
-const escapeRegex = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const parseQRValue = (value: unknown): QRUploadRow | null => {
   const qrValue = String(value || "").trim();
@@ -38,6 +37,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuthenticatedUser();
     if (auth.response) return auth.response;
+    await ensureProductIndexes();
     const formData = await req.formData();
     const file = formData.get("file") as File;
 
@@ -110,17 +110,10 @@ export async function POST(req: NextRequest) {
     );
     const productsByItemNo = buildProductsByItemNo(products);
 
-    const catalogueImages = (await db
-      .collection("imageCatalogue")
-      .find({
-        $or: itemNos.map((itemNo) => ({
-          itemNo: {
-            $regex: `^\\s*${escapeRegex(itemNo)}\\s*$`,
-            $options: "i",
-          },
-        })),
-      })
-      .toArray()) as any[];
+    const catalogueImages = await findCatalogueImagesByItemNos(
+      db.collection("imageCatalogue"),
+      itemNos
+    );
 
     const imageMap = buildCatalogueImageMap(catalogueImages);
 

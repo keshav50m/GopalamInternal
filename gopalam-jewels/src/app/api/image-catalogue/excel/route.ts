@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import clientPromise from "@/lib/mongodb";
 import { requireAuthenticatedUser } from "@/lib/auth";
+import { ensureProductIndexes } from "@/lib/databaseIndexes";
+import { findCatalogueImagesByItemNos } from "@/lib/imageCatalogueQueries";
 import {
     buildCatalogueImageMap,
     buildProductsByItemNo,
@@ -9,13 +11,11 @@ import {
     resolveImageCatalogueExcelImage,
 } from "@/utils/resolveImageCatalogueExcelImage";
 
-const escapeRegex = (value: string) =>
-    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 export async function POST(req: NextRequest) {
     try {
         const auth = await requireAuthenticatedUser();
         if (auth.response) return auth.response;
+        await ensureProductIndexes();
         const formData = await req.formData();
         const file = formData.get("file") as File;
 
@@ -78,26 +78,15 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        const catalogueImages =
-            (await db
-                .collection("imageCatalogue")
-                .find({
-                    $or: uniqueItemNos.map((itemNo) => ({
-                        itemNo: {
-                            $regex: `^\\s*${escapeRegex(itemNo)}\\s*$`,
-                            $options: "i",
-                        },
-                    })),
-                })
-                .toArray()) as any[];
+        const catalogueImages = await findCatalogueImagesByItemNos(
+            db.collection("imageCatalogue"),
+            uniqueItemNos
+        );
 
         const imageMap = buildCatalogueImageMap(catalogueImages);
 
         const result = uniqueItemNos.map(itemNo => {
-            const firstProduct = products.find(
-                (p: any) =>
-                    normalizeItemNo(p.data?.ITEMNO) === itemNo
-            );
+            const firstProduct = productsByItemNo.get(itemNo)?.[0];
             const displayItemNo = firstProduct?.data?.ITEMNO || itemNo;
 
             return {
