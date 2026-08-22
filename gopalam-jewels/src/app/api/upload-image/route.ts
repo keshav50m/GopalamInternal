@@ -21,6 +21,9 @@ const getImageStorageProvider = () => {
   return provider === "r2" ? "r2" : "cloudinary";
 };
 
+const shouldWriteImagesToBoth = () =>
+  process.env.WRITE_IMAGES_TO_BOTH?.trim().toLowerCase() === "true";
+
 const sanitizeFileName = (fileName: string) => {
   const nameWithoutExtension = fileName.replace(/\.[^.]+$/, "");
   const safeName = nameWithoutExtension
@@ -97,7 +100,12 @@ export async function POST(request: NextRequest) {
     }
 
     const provider = getImageStorageProvider();
+    const dualWriteEnabled =
+      provider === "cloudinary" && shouldWriteImagesToBoth();
     let result: { imageUrl: string; objectKey: string };
+    let cloudinaryUrl: string | null = null;
+    let r2Url: string | null = null;
+    let r2ShadowStatus: "disabled" | "success" | "failed" = "disabled";
 
     if (provider === "r2") {
       const objectKey = createObjectKey(file);
@@ -116,12 +124,44 @@ export async function POST(request: NextRequest) {
       });
     } else {
       result = await uploadImageToCloudinary(file);
+      cloudinaryUrl = result.imageUrl;
+
+      if (dualWriteEnabled) {
+        const objectKey = createObjectKey(file);
+
+        try {
+          const body = new Uint8Array(await file.arrayBuffer());
+          const r2Result = await uploadImageToR2({
+            body,
+            contentType: file.type,
+            objectKey,
+          });
+          r2Url = r2Result.imageUrl;
+          r2ShadowStatus = "success";
+        } catch (shadowError) {
+          r2ShadowStatus = "failed";
+          console.error("[R2 Shadow Upload Failed]", {
+            timestamp: new Date().toISOString(),
+            cloudinaryUploadSucceeded: true,
+            objectKey,
+            size: file.size,
+            contentType: file.type,
+            reason:
+              shadowError instanceof Error
+                ? shadowError.message
+                : "Unknown R2 shadow upload error",
+          });
+        }
+      }
     }
 
     return NextResponse.json({
       success: true,
       provider,
       ...result,
+      cloudinaryUrl,
+      r2Url,
+      r2ShadowStatus,
     });
   } catch (error) {
     console.error("Image upload failed", {

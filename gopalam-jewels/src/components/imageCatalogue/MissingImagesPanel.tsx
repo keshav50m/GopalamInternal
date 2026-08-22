@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import styles from "./ImageCatalogue.module.css";
-import { uploadProductImage } from "@/utils/uploadProductImage";
+import {
+  uploadProductImage,
+  type UploadedProductImage,
+} from "@/utils/uploadProductImage";
 import {
   buildCloudinaryDeliveryUrl,
   CLOUDINARY_THUMBNAIL_TRANSFORMATION,
@@ -16,12 +19,14 @@ type MissingProduct = {
   file: File | null;
   previewUrl: string;
   uploadedUrl?: string;
+  uploadedR2Url?: string;
 };
 
 type MissingProductImage = {
   barcode: string | number;
   itemNo: string;
   image: string;
+  r2Image?: string;
 };
 
 export default function MissingImagesPanel() {
@@ -76,6 +81,7 @@ export default function MissingImagesPanel() {
           file,
           previewUrl: file ? URL.createObjectURL(file) : "",
           uploadedUrl: "",
+          uploadedR2Url: undefined,
         };
       })
     );
@@ -85,7 +91,7 @@ export default function MissingImagesPanel() {
 
   const prepareProductImage = async (
     product: MissingProduct,
-    uploadCache = new Map<string, Promise<string>>()
+    uploadCache = new Map<string, Promise<UploadedProductImage>>()
   ): Promise<MissingProductImage> => {
     if (!product.file && !product.uploadedUrl) {
       throw new Error(`Select an image for Item No ${product.itemNo || "unknown"}`);
@@ -96,6 +102,7 @@ export default function MissingImagesPanel() {
     }
 
     let image = product.uploadedUrl || "";
+    let r2Image = product.uploadedR2Url;
 
     if (!image && product.file) {
       const uploadKey = await getFileUploadKey(
@@ -110,7 +117,11 @@ export default function MissingImagesPanel() {
         );
       }
 
-      image = await uploadCache.get(uploadKey)!;
+      const uploadedImage = await uploadCache.get(uploadKey)!;
+      image = uploadedImage.imageUrl;
+      if (Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")) {
+        r2Image = uploadedImage.r2Image || "";
+      }
 
       if (product.previewUrl.startsWith("blob:")) {
         URL.revokeObjectURL(product.previewUrl);
@@ -124,6 +135,7 @@ export default function MissingImagesPanel() {
                 file: null,
                 previewUrl: image,
                 uploadedUrl: image,
+                ...(r2Image !== undefined ? { uploadedR2Url: r2Image } : {}),
               }
             : currentProduct
         )
@@ -134,6 +146,7 @@ export default function MissingImagesPanel() {
       barcode: product.barcode,
       itemNo: product.itemNo,
       image,
+      ...(r2Image !== undefined ? { r2Image } : {}),
     };
   };
 
@@ -160,7 +173,7 @@ export default function MissingImagesPanel() {
 
   const persistProductImage = async (
     product: MissingProduct,
-    uploadCache = new Map<string, Promise<string>>()
+    uploadCache = new Map<string, Promise<UploadedProductImage>>()
   ) => {
     const item = await prepareProductImage(product, uploadCache);
     await saveProductImages([item]);
@@ -205,7 +218,7 @@ export default function MissingImagesPanel() {
 
     const successfulIds: string[] = [];
     const failures: string[] = [];
-    const uploadCache = new Map<string, Promise<string>>();
+    const uploadCache = new Map<string, Promise<UploadedProductImage>>();
     const preparedItems: {
       product: MissingProduct;
       item: MissingProductImage;

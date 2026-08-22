@@ -10,7 +10,7 @@ import styles from "./QRUpdateReview.module.css";
 export type QRUpdateConflict = {
   id: string;
   barcode: string;
-  currentProduct: { data?: Record<string, unknown>; image?: string };
+  currentProduct: { data?: Record<string, unknown>; image?: string; r2Image?: string };
   newData: QRProductData;
   currentImage: string;
   changedFields: string[];
@@ -26,7 +26,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onChange: (id: string, patch: Partial<QRUpdateConflict>) => void;
-  onResolved: (resolved: Array<{ id: string; barcode: string; newData: QRProductData; image: string }>) => void;
+  onResolved: (resolved: Array<{ id: string; barcode: string; newData: QRProductData; image: string; r2Image?: string }>) => void;
 };
 
 const LABELS: Record<string, string> = {
@@ -42,17 +42,39 @@ export default function QRUpdateReview({ conflicts, open, onClose, onChange, onR
   if (!open) return null;
 
   const updateConflicts = async (targets: QRUpdateConflict[]) => {
-    const ready: Array<{ conflict: QRUpdateConflict; image: string }> = [];
+    const ready: Array<{
+      conflict: QRUpdateConflict;
+      image: string;
+      r2Image?: string;
+      replaceImage: boolean;
+    }> = [];
 
     for (const conflict of targets) {
       onChange(conflict.id, { status: "updating", error: "" });
       try {
-        const image = conflict.imageChoice === "new"
-          ? conflict.newImageFile
-            ? await uploadProductImage(conflict.newImageFile)
-            : (() => { throw new Error("Select a new image before updating."); })()
-          : conflict.currentImage || "";
-        ready.push({ conflict, image });
+        if (conflict.imageChoice === "new") {
+          if (!conflict.newImageFile) {
+            throw new Error("Select a new image before updating.");
+          }
+          const uploadedImage = await uploadProductImage(conflict.newImageFile);
+          ready.push({
+            conflict,
+            image: uploadedImage.imageUrl,
+            ...(Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")
+              ? { r2Image: uploadedImage.r2Image || "" }
+              : {}),
+            replaceImage: true,
+          });
+        } else {
+          ready.push({
+            conflict,
+            image: conflict.currentImage || "",
+            ...(Object.prototype.hasOwnProperty.call(conflict.currentProduct, "r2Image")
+              ? { r2Image: String(conflict.currentProduct.r2Image || "") }
+              : {}),
+            replaceImage: false,
+          });
+        }
       } catch (error) {
         onChange(conflict.id, { status: "idle", error: error instanceof Error ? error.message : "Image upload failed" });
       }
@@ -63,7 +85,15 @@ export default function QRUpdateReview({ conflicts, open, onClose, onChange, onR
       const response = await fetch("/api/saved-products/update-from-qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ updates: ready.map(({ conflict, image }) => ({ barcode: conflict.barcode, newData: conflict.newData, image })) }),
+        body: JSON.stringify({
+          updates: ready.map(({ conflict, image, r2Image, replaceImage }) => ({
+            barcode: conflict.barcode,
+            newData: conflict.newData,
+            image,
+            replaceImage,
+            ...(r2Image !== undefined ? { r2Image } : {}),
+          })),
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Product update failed");
@@ -71,7 +101,17 @@ export default function QRUpdateReview({ conflicts, open, onClose, onChange, onR
       const results = Array.isArray(data.results) ? data.results : [];
       const successes = results.filter((result: any) => result.success);
       const successBarcodes = new Set(successes.map((result: any) => result.barcode));
-      const resolved = ready.filter(({ conflict }) => successBarcodes.has(conflict.barcode)).map(({ conflict, image }) => ({ id: conflict.id, barcode: conflict.barcode, newData: conflict.newData, image }));
+      const resolved = ready.filter(({ conflict }) => successBarcodes.has(conflict.barcode)).map(({ conflict, image, r2Image, replaceImage }) => ({
+        id: conflict.id,
+        barcode: conflict.barcode,
+        newData: conflict.newData,
+        image,
+        ...(r2Image !== undefined
+          ? { r2Image }
+          : !replaceImage && Object.prototype.hasOwnProperty.call(conflict.currentProduct, "r2Image")
+            ? { r2Image: String(conflict.currentProduct.r2Image || "") }
+            : {}),
+      }));
       results.filter((result: any) => !result.success).forEach((result: any) => {
         const conflict = ready.find((item) => item.conflict.barcode === result.barcode)?.conflict;
         if (conflict) onChange(conflict.id, { status: "idle", error: result.error || "Update failed" });

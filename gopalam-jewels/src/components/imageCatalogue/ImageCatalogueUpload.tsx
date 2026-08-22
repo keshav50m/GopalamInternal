@@ -2,7 +2,10 @@
 
 import { useState, useRef } from "react";
 import styles from "./ImageCatalogue.module.css";
-import { uploadProductImage } from "@/utils/uploadProductImage";
+import {
+  uploadProductImage,
+  type UploadedProductImage,
+} from "@/utils/uploadProductImage";
 import {
   buildCloudinaryDeliveryUrl,
   CLOUDINARY_THUMBNAIL_TRANSFORMATION,
@@ -16,6 +19,7 @@ type CatalogueUploadRow = {
   barcode: string;
   itemNo: string;
   previewUrl: string;
+  r2Image?: string;
 };
 
 type ImageFilter = "all" | "present" | "missing";
@@ -48,7 +52,7 @@ export default function ImageCatalogueUpload() {
   const barcodeRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const saveImageCatalogueItems = async (
-    items: { itemNo: string; image: string }[]
+    items: { itemNo: string; image: string; r2Image?: string }[]
   ) => {
     const res = await fetch("/api/image-catalogue", {
       method: "POST",
@@ -87,6 +91,9 @@ export default function ImageCatalogueUpload() {
       if (data?.image) {
         updateRow(id, {
           previewUrl: data.image,
+          ...(Object.prototype.hasOwnProperty.call(data, "r2Image")
+            ? { r2Image: String(data.r2Image || "") }
+            : {}),
         });
 
         setRows((prevRows) => {
@@ -348,11 +355,12 @@ export default function ImageCatalogueUpload() {
       const validRows = rows.filter(
         (row) => row.itemNo.trim()
       );
-      const uploadCache = new Map<string, Promise<string>>();
-      const itemsToSave: { itemNo: string; image: string }[] = [];
+      const uploadCache = new Map<string, Promise<UploadedProductImage>>();
+      const itemsToSave: { itemNo: string; image: string; r2Image?: string }[] = [];
 
       for (const row of validRows) {
         let imageUrl = row.previewUrl;
+        let r2Image = row.r2Image;
 
         if (row.file) {
           const uploadKey = await getFileUploadKey(
@@ -367,7 +375,11 @@ export default function ImageCatalogueUpload() {
             );
           }
 
-          imageUrl = await uploadCache.get(uploadKey)!;
+          const uploadedImage = await uploadCache.get(uploadKey)!;
+          imageUrl = uploadedImage.imageUrl;
+          if (Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")) {
+            r2Image = uploadedImage.r2Image || "";
+          }
 
           if (row.previewUrl.startsWith("blob:")) {
             URL.revokeObjectURL(row.previewUrl);
@@ -376,12 +388,18 @@ export default function ImageCatalogueUpload() {
           updateRow(row.id, {
             file: null,
             previewUrl: imageUrl,
+            ...(Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")
+              ? { r2Image: uploadedImage.r2Image || "" }
+              : {}),
           });
         }
 
         itemsToSave.push({
           itemNo: row.itemNo.trim(),
           image: imageUrl,
+          ...(r2Image !== undefined
+            ? { r2Image: String(r2Image || "") }
+            : {}),
         });
       }
 

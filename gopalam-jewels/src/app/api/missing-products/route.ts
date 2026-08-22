@@ -8,6 +8,7 @@ type MissingProductImage = {
   barcode: string;
   itemNo: string;
   image: string;
+  r2Image?: string;
 };
 
 const hasDurableImageExpression = (field: string) => ({
@@ -139,13 +140,23 @@ export async function POST(request: NextRequest) {
     const isBatchRequest = Array.isArray(body.items);
     const requestedItems = isBatchRequest
       ? body.items
-      : [{ barcode: body.barcode, itemNo: body.itemNo, image: body.image }];
+      : [{
+          barcode: body.barcode,
+          itemNo: body.itemNo,
+          image: body.image,
+          ...(Object.prototype.hasOwnProperty.call(body, "r2Image")
+            ? { r2Image: body.r2Image }
+            : {}),
+        }];
     const itemsByBarcode = new Map<string, MissingProductImage>(
       requestedItems.map((item: any): [string, MissingProductImage] => {
         const normalizedItem = {
           barcode: String(item?.barcode || "").trim(),
           itemNo: String(item?.itemNo || "").trim(),
           image: normalizeStoredImageUrl(item?.image),
+          ...(Object.prototype.hasOwnProperty.call(item, "r2Image")
+            ? { r2Image: normalizeStoredImageUrl(item?.r2Image) }
+            : {}),
         };
         return [normalizedItem.barcode, normalizedItem];
       })
@@ -189,27 +200,40 @@ export async function POST(request: NextRequest) {
     if (itemsToSave.length > 0) {
       await Promise.all([
         db.collection("savedProducts").bulkWrite(
-          itemsToSave.map((item) => ({
-            updateOne: {
-              filter: { barcode: item.barcode },
-              update: { $set: { image: item.image, updatedAt } },
-            },
-          }))
+          itemsToSave.map((item) => {
+            const fieldsToSet: Record<string, unknown> = {
+              image: item.image,
+              updatedAt,
+            };
+            if (Object.prototype.hasOwnProperty.call(item, "r2Image")) {
+              fieldsToSet.r2Image = item.r2Image;
+            }
+            return {
+              updateOne: {
+                filter: { barcode: item.barcode },
+                update: { $set: fieldsToSet },
+              },
+            };
+          })
         ),
         db.collection("imageCatalogue").bulkWrite(
-          itemsToSave.map((item) => ({
-            updateOne: {
-              filter: { itemNo: item.itemNo },
-              update: {
-                $set: {
-                  itemNo: item.itemNo,
-                  image: item.image,
-                  updatedAt,
-                },
+          itemsToSave.map((item) => {
+            const fieldsToSet: Record<string, unknown> = {
+              itemNo: item.itemNo,
+              image: item.image,
+              updatedAt,
+            };
+            if (Object.prototype.hasOwnProperty.call(item, "r2Image")) {
+              fieldsToSet.r2Image = item.r2Image;
+            }
+            return {
+              updateOne: {
+                filter: { itemNo: item.itemNo },
+                update: { $set: fieldsToSet },
+                upsert: true,
               },
-              upsert: true,
-            },
-          }))
+            };
+          })
         ),
       ]);
     }

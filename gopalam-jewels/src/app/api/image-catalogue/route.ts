@@ -35,10 +35,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const requestedItems = Array.isArray(body.items)
       ? body.items
-      : [{ itemNo: body.itemNo, image: body.image }];
+      : [{ itemNo: body.itemNo, image: body.image, ...(Object.prototype.hasOwnProperty.call(body, "r2Image") ? { r2Image: body.r2Image } : {}) }];
     const items = requestedItems.map((item: any) => ({
       itemNo: String(item?.itemNo || "").trim(),
       image: String(item?.image || "").trim(),
+      ...(Object.prototype.hasOwnProperty.call(item, "r2Image")
+        ? { r2Image: String(item?.r2Image || "").trim() }
+        : {}),
     }));
 
     if (
@@ -56,19 +59,23 @@ export async function POST(request: NextRequest) {
 
     const updatedAt = new Date();
     await db.collection("imageCatalogue").bulkWrite(
-      items.map((item: any) => ({
-        updateOne: {
-          filter: { itemNo: item.itemNo },
-          update: {
-            $set: {
-              itemNo: item.itemNo,
-              image: item.image,
-              updatedAt,
-            },
+      items.map((item: any) => {
+        const fieldsToSet: Record<string, unknown> = {
+          itemNo: item.itemNo,
+          image: item.image,
+          updatedAt,
+        };
+        if (Object.prototype.hasOwnProperty.call(item, "r2Image")) {
+          fieldsToSet.r2Image = item.r2Image;
+        }
+        return {
+          updateOne: {
+            filter: { itemNo: item.itemNo },
+            update: { $set: fieldsToSet },
+            upsert: true,
           },
-          upsert: true,
-        },
-      }))
+        };
+      })
     );
 
     return NextResponse.json({

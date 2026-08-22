@@ -13,6 +13,8 @@
 # testing
 /coverage
 /audit-reports/
+/reports/
+/migration-backups/
 
 # next.js
 /.next/

@@ -119,12 +119,21 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
   const changeConflict = (id: string, patch: Partial<QRUpdateConflict>) =>
     setConflicts((current) => current.map((conflict) => conflict.id === id ? { ...conflict, ...patch } : conflict));
 
-  const resolveConflicts = (resolved: Array<{ id: string; barcode: string; newData: any; image: string }>) => {
+  const resolveConflicts = (resolved: Array<{ id: string; barcode: string; newData: any; image: string; r2Image?: string }>) => {
     const resolvedById = new Map(resolved.map((item) => [item.id, item]));
     setRows((currentRows) => currentRows.map((row) => {
       const result = resolvedById.get(row.__qrUpdateConflictId);
       if (!result) return row;
-      const updatedRow = { ...row, barcode: result.barcode, data: result.newData, imageUrl: result.image, previewUrl: result.image };
+      const updatedRow = {
+        ...row,
+        barcode: result.barcode,
+        data: result.newData,
+        imageUrl: result.image,
+        previewUrl: result.image,
+        ...(Object.prototype.hasOwnProperty.call(result, "r2Image")
+          ? { r2Image: String(result.r2Image || "") }
+          : {}),
+      };
       delete updatedRow.__qrUpdateConflictId;
       return updatedRow;
     }));

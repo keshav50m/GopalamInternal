@@ -95,20 +95,24 @@ export async function POST(request: NextRequest) {
     const db = client.db("gopalamJewels");
     const updatedAt = new Date();
 
-    const bulkOps = products.map((item: any) => ({
-      updateOne: {
-        filter: { barcode: String(item.barcode).trim() },
-        update: {
-          $set: {
-            barcode: String(item.barcode).trim(),
-            image: item.image || "",           // Cloudinary URL
-            data: item.data || {},
-            updatedAt,
-          },
+    const bulkOps = products.map((item: any) => {
+      const fieldsToSet: Record<string, unknown> = {
+        barcode: String(item.barcode).trim(),
+        image: item.image || "",           // Cloudinary primary URL
+        data: item.data || {},
+        updatedAt,
+      };
+      if (Object.prototype.hasOwnProperty.call(item, "r2Image")) {
+        fieldsToSet.r2Image = String(item.r2Image || "").trim();
+      }
+      return {
+        updateOne: {
+          filter: { barcode: String(item.barcode).trim() },
+          update: { $set: fieldsToSet },
+          upsert: true,
         },
-        upsert: true,
-      },
-    }));
+      };
+    });
 
     await db.collection("savedProducts").bulkWrite(bulkOps);
 
@@ -116,21 +120,28 @@ export async function POST(request: NextRequest) {
       .map((item: any) => ({
         itemNo: String(item.data?.ITEMNO || "").trim(),
         image: String(item.image || "").trim(),
+        ...(Object.prototype.hasOwnProperty.call(item, "r2Image")
+          ? { r2Image: String(item.r2Image || "").trim() }
+          : {}),
       }))
       .filter((item: any) => item.itemNo && item.image)
-      .map((item: any) => ({
-        updateOne: {
-          filter: { itemNo: item.itemNo },
-          update: {
-            $set: {
-              itemNo: item.itemNo,
-              image: item.image,
-              updatedAt,
-            },
+      .map((item: any) => {
+        const fieldsToSet: Record<string, unknown> = {
+          itemNo: item.itemNo,
+          image: item.image,
+          updatedAt,
+        };
+        if (Object.prototype.hasOwnProperty.call(item, "r2Image")) {
+          fieldsToSet.r2Image = item.r2Image;
+        }
+        return {
+          updateOne: {
+            filter: { itemNo: item.itemNo },
+            update: { $set: fieldsToSet },
+            upsert: true,
           },
-          upsert: true,
-        },
-      }));
+        };
+      });
 
     if (imageCatalogueOps.length > 0) {
       await db.collection("imageCatalogue").bulkWrite(imageCatalogueOps);

@@ -8,7 +8,10 @@ import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
 import { resolveProductImage } from "@/utils/resolveProductImage";
 import { applyDiscount } from "@/utils/applyDiscount";
 import { getFileUploadKey } from "@/utils/cloudinaryDelivery";
-import { uploadProductImage } from "@/utils/uploadProductImage";
+import {
+  uploadProductImage,
+  type UploadedProductImage,
+} from "@/utils/uploadProductImage";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
 import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
 import { parseQRCode } from "@/utils/qrProductData";
@@ -116,7 +119,7 @@ export default function ProductPanel() {
   const lastQRRef = useRef<HTMLInputElement>(null);
   const lastBarcodeRef = useRef<HTMLInputElement>(null);
   const scannerUploadCacheRef = useRef(
-    new Map<string, Promise<string>>()
+    new Map<string, Promise<UploadedProductImage>>()
   );
   const activeImageUploadTasksRef = useRef(new Set<Promise<void>>());
   const qrLookupCacheRef = useRef(
@@ -491,7 +494,8 @@ export default function ProductPanel() {
         );
       }
 
-      const imageUrl = await scannerUploadCacheRef.current.get(uploadKey)!;
+      const uploadedImage = await scannerUploadCacheRef.current.get(uploadKey)!;
+      const imageUrl = uploadedImage.imageUrl;
       setRows((currentRows) => {
         const nextRows = currentRows.map((currentRow) => {
           const isSelectedRow = currentRow.previewUrl === previewUrl;
@@ -513,6 +517,9 @@ export default function ProductPanel() {
           return {
             ...currentRow,
             imageUrl,
+            ...(Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")
+              ? { r2Image: uploadedImage.r2Image || "" }
+              : {}),
             previewUrl: isSelectedRow
               ? currentRow.previewUrl
               : imageUrl,
@@ -554,6 +561,9 @@ export default function ProductPanel() {
       barcode: r.barcode,
       image: r.imageUrl || "",
       data: r.data,
+      ...(Object.prototype.hasOwnProperty.call(r, "r2Image")
+        ? { r2Image: String(r.r2Image || "") }
+        : {}),
     }));
 
     if (toSave.length === 0) return alert("No products to save");

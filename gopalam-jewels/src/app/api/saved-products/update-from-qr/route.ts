@@ -8,6 +8,8 @@ import { QR_PRODUCT_FIELDS } from "@/utils/qrProductData";
 type ValidUpdate = {
   barcode: string;
   image: string;
+  r2Image?: string;
+  replaceImage: boolean;
   newData: Record<string, string>;
 };
 
@@ -16,6 +18,10 @@ const validateUpdate = (value: unknown): ValidUpdate | null => {
   const candidate = value as Record<string, unknown>;
   const barcode = normalizeBarcode(candidate.barcode);
   const image = typeof candidate.image === "string" ? candidate.image.trim() : "";
+  const replaceImage = candidate.replaceImage === true;
+  const r2Image = Object.prototype.hasOwnProperty.call(candidate, "r2Image")
+    ? String(candidate.r2Image || "").trim()
+    : undefined;
   const inputData = candidate.newData;
   if (!barcode || !inputData || typeof inputData !== "object") return null;
   const record = inputData as Record<string, unknown>;
@@ -26,7 +32,7 @@ const validateUpdate = (value: unknown): ValidUpdate | null => {
   QR_PRODUCT_FIELDS.forEach((field) => {
     newData[field] = String(record[field] ?? "").trim();
   });
-  return { barcode, image, newData };
+  return { barcode, image, r2Image, replaceImage, newData };
 };
 
 export async function POST(request: NextRequest) {
@@ -61,17 +67,33 @@ export async function POST(request: NextRequest) {
         const itemNo = update.newData.ITEMNO;
 
         if (update.image) {
+          const catalogueFields: Record<string, unknown> = {
+            itemNo,
+            image: update.image,
+            updatedAt,
+          };
+          if (update.r2Image !== undefined) {
+            catalogueFields.r2Image = update.r2Image;
+          }
           await db.collection("imageCatalogue").updateOne(
             { itemNo },
-            { $set: { itemNo, image: update.image, updatedAt } },
+            { $set: catalogueFields },
             { upsert: true }
           );
         }
 
         const mergedData = { ...(current.data || {}), ...update.newData, BARCODE: update.barcode };
+        const productFields: Record<string, unknown> = {
+          data: mergedData,
+          image: update.image,
+          updatedAt,
+        };
+        if (update.replaceImage && update.r2Image !== undefined) {
+          productFields.r2Image = update.r2Image;
+        }
         const productResult = await db.collection("savedProducts").updateOne(
           { barcode: update.barcode },
-          { $set: { data: mergedData, image: update.image, updatedAt } }
+          { $set: productFields }
         );
         if (productResult.matchedCount !== 1) throw new Error("Saved product changed during update");
         results.push({ barcode: update.barcode, success: true });
