@@ -11,6 +11,7 @@ import { getFileUploadKey } from "@/utils/cloudinaryDelivery";
 import { uploadProductImage } from "@/utils/uploadProductImage";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
 import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+import { parseQRCode } from "@/utils/qrProductData";
 import {
   clearScannerRows,
   readScannerRows,
@@ -205,21 +206,6 @@ export default function ProductPanel() {
       writeScannerRows(latestRowsRef.current);
     }
   }, []);
-
-  const parseQRCode = (fullString: string) => {
-    const parts = fullString.split(",").map(p => p.trim());
-    return {
-      BARCODE: parts[0] || "",
-      ITEMNO: parts[1] || "",
-      "STONE NAME": parts[2] || "",
-      "GROSS WT": parts[3] || "",
-      "STONE WT": parts[4] || "",
-      "DAI WT": parts[5] || "",
-      "TAG PRICE": parts[6] || "",
-      SIZE: parts[7] || "",
-      USD: parts[8] || "",
-    };
-  };
 
   const lookupQRProduct = async (
     index: number,
@@ -450,6 +436,9 @@ export default function ProductPanel() {
   const handleImage = (index: number, file: File) => {
     if (!file) return;
     const previewUrl = URL.createObjectURL(file);
+    const selectedRow = latestRowsRef.current[index] || rows[index];
+    const selectedItemNo = normalizeItemNo(selectedRow?.data?.ITEMNO);
+    const keepMatchingRowsInMissing = imageFilter === "missing";
 
     setRows((currentRows) => {
       const nextRows = currentRows.map((row, currentIndex) =>
@@ -468,7 +457,13 @@ export default function ProductPanel() {
       return nextRows;
     });
 
-    const uploadTask = uploadImage(file, index, previewUrl);
+    const uploadTask = uploadImage(
+      file,
+      index,
+      previewUrl,
+      selectedItemNo,
+      keepMatchingRowsInMissing
+    );
     activeImageUploadTasksRef.current.add(uploadTask);
     uploadTask.finally(() => {
       activeImageUploadTasksRef.current.delete(uploadTask);
@@ -478,9 +473,11 @@ export default function ProductPanel() {
   const uploadImage = async (
     file: File,
     index: number,
-    previewUrl: string
+    previewUrl: string,
+    selectedItemNo: string,
+    keepMatchingRowsInMissing: boolean
   ) => {
-    const row = rows[index];
+    const row = latestRowsRef.current[index] || rows[index];
     const uploadScope = String(
       row?.data?.ITEMNO || row?.barcode || ""
     ).trim();
@@ -496,11 +493,35 @@ export default function ProductPanel() {
 
       const imageUrl = await scannerUploadCacheRef.current.get(uploadKey)!;
       setRows((currentRows) => {
-        const nextRows = currentRows.map((currentRow) =>
-          currentRow.previewUrl === previewUrl
-            ? { ...currentRow, imageUrl }
-            : currentRow
-        );
+        const nextRows = currentRows.map((currentRow) => {
+          const isSelectedRow = currentRow.previewUrl === previewUrl;
+          const hasMatchingItemNo = Boolean(
+            selectedItemNo &&
+            normalizeItemNo(currentRow.data?.ITEMNO) === selectedItemNo
+          );
+
+          if (!isSelectedRow && !hasMatchingItemNo) return currentRow;
+
+          const wasMissing = getImageFilterStatus(currentRow) === "missing";
+          const hasAnotherPendingPreview = Boolean(
+            !isSelectedRow &&
+            String(currentRow.previewUrl || "").startsWith("blob:")
+          );
+
+          if (hasAnotherPendingPreview) return currentRow;
+
+          return {
+            ...currentRow,
+            imageUrl,
+            previewUrl: isSelectedRow
+              ? currentRow.previewUrl
+              : imageUrl,
+            __imageFilterStatus:
+              keepMatchingRowsInMissing && wasMissing
+                ? "missing"
+                : currentRow.__imageFilterStatus,
+          };
+        });
         latestRowsRef.current = nextRows;
         return nextRows;
       });
