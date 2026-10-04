@@ -8,7 +8,8 @@
     "seed:admin": "node scripts/create-initial-admin.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test:image-provider": "node --test --experimental-strip-types tests/imageProvider.test.ts"
+    "test:image-provider": "node --test --experimental-strip-types tests/imageProvider.test.ts",
+    "test:gold-scanner": "node --test --experimental-strip-types tests/goldScanner.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",

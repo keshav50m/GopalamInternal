@@ -2,15 +2,19 @@ import Link from "next/link";
 import CustomSearch from "@/components/customSearch/CustomSearch";
 import styles from "@/components/customSearch/CustomSearch.module.css";
 import AdminButton from "@/components/AdminButton";
+import ChangeTypeButton from "@/components/ChangeTypeButton";
 
 export default function CustomSearchPage() {
   return (
     <main className={styles.shell}>
       <header className={styles.topBar}>
         <div className={styles.topBarInner}>
-          <div className={styles.brandBlock}>
-            <span>Gopalam Jewels</span>
-            <h1>Custom Search</h1>
+          <div className={styles.brandArea}>
+            <ChangeTypeButton />
+            <div className={styles.brandBlock}>
+              <span>Gopalam Jewels</span>
+              <h1>Custom Search</h1>
+            </div>
           </div>
           <AdminButton />
 

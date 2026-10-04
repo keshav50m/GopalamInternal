@@ -1,0 +1,248 @@
+.shell {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.toolbar,
+.actions,
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar {
+  margin-bottom: 18px;
+}
+
+.discounts {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.discounts label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.discounts input {
+  display: block;
+  width: 90px;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 5px 7px;
+  border: 1px solid #aaa;
+  border-radius: 2px;
+}
+
+.toolbar h2,
+.toolbar h3 {
+  margin: 0 0 8px;
+}
+
+.hint {
+  margin: 0;
+  color: #28a745;
+  font-weight: 700;
+}
+
+.excelUploads {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.fileInput {
+  max-width: 280px;
+  border: 1px solid #ccc;
+  padding: 6px;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 1300px;
+  table-layout: fixed;
+}
+
+.table input[type="text"] {
+  box-sizing: border-box;
+  padding: 7px;
+  border: 1px solid #d7d1c4;
+  border-radius: 4px;
+}
+
+.qrInput {
+  width: 110px;
+}
+
+.barcodeInput {
+  width: 110px;
+}
+
+.fileLabel {
+  display: inline-block;
+  padding: 3px 7px;
+  font-size: 11px;
+  background: #eee;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.thumbnail {
+  display: block;
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  margin-top: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.emptyImage {
+  margin-top: 6px;
+  color: #888;
+  font-size: 12px;
+}
+
+.removeButton,
+.addButton,
+.saveButton,
+.actionButton,
+.dangerButton {
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.removeButton { background: #ef4444; padding: 6px 12px; }
+.addButton { background: #3b82f6; }
+.saveButton { background: #28a745; }
+.actionButton { background: #3b82f6; }
+.dangerButton { background: #dc2626; }
+.saveButton:disabled { opacity: 0.6; cursor: wait; }
+
+.summary {
+  margin-top: 20px;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.actions {
+  justify-content: flex-start;
+  margin-top: 18px;
+}
+
+.secondaryActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.filterButton {
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: white;
+  background: #64748b;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activeFilter {
+  background: #3b82f6;
+}
+
+.scrollButton {
+  position: fixed;
+  right: 24px;
+  z-index: 900;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 16px;
+  color: white;
+  background: #111827;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+.scrollTop { bottom: 78px; }
+.scrollBottom { bottom: 24px; }
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal {
+  width: min(420px, calc(100vw - 40px));
+  box-sizing: border-box;
+  padding: 22px;
+  border-radius: 8px;
+  background: white;
+}
+
+.modal label {
+  display: block;
+  font-weight: 700;
+}
+
+.modal input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 8px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.error {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.imageDialog {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.imageDialog::backdrop {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.largeImage {
+  display: block;
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+}

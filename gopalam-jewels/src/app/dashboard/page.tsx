@@ -9,6 +9,7 @@ import DashboardTables from "@/components/dashboard/DashboardTables";
 import type { DashboardData } from "@/components/dashboard/types";
 import styles from "@/components/dashboard/Dashboard.module.css";
 import AdminButton from "@/components/AdminButton";
+import ChangeTypeButton from "@/components/ChangeTypeButton";
 
 export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -50,9 +51,12 @@ export default function DashboardPage() {
     <main className={styles.dashboardShell}>
       <header className={styles.topBar}>
         <div className={styles.topBarInner}>
-          <div className={styles.brandBlock}>
-            <span>Gopalam Jewels</span>
-            <h1>Admin Dashboard</h1>
+          <div className={styles.brandArea}>
+            <ChangeTypeButton />
+            <div className={styles.brandBlock}>
+              <span>Gopalam Jewels</span>
+              <h1>Admin Dashboard</h1>
+            </div>
           </div>
           <AdminButton />
 

@@ -23,6 +23,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 15px 20px;
+  gap: 18px;
 }
 
 .logo {

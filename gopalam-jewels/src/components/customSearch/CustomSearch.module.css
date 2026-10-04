@@ -18,6 +18,12 @@
   gap: 18px;
 }
 
+.brandArea {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
 .brandBlock {
   display: flex;
   flex-direction: column;

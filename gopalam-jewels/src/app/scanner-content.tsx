@@ -3,17 +3,14 @@
 import Link from "next/link";
 import ProductPanel from "@/components/ProductLookup";
 import AdminButton from "@/components/AdminButton";
+import ChangeTypeButton from "@/components/ChangeTypeButton";
 
 export default function ScannerPage() {
-  const resetType = () => {
-    localStorage.removeItem("jewelleryType");
-    window.location.href = "/";
-  };
-
   return (
     <div className="wrapper">
       <div className="header">
         <div className="header-inner">
+          <ChangeTypeButton />
           <img
             src="/gopalam-jewels-logo.png"
             className="logo"
@@ -86,21 +83,6 @@ export default function ScannerPage() {
               Custom Search
             </Link>
 
-            <button
-              onClick={resetType}
-              style={{
-                color: "#ffffff",
-                background: "#dc2626",
-                border: "1px solid #dc2626",
-                borderRadius: "6px",
-                padding: "9px 14px",
-                fontSize: "14px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Change Type
-            </button>
           </nav>
         </div>
       </div>

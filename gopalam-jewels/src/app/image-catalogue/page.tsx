@@ -3,15 +3,19 @@ import ImageCatalogueUpload from "@/components/imageCatalogue/ImageCatalogueUplo
 import styles from "@/components/imageCatalogue/ImageCatalogue.module.css";
 import MissingImagesPanel from "@/components/imageCatalogue/MissingImagesPanel";
 import AdminButton from "@/components/AdminButton";
+import ChangeTypeButton from "@/components/ChangeTypeButton";
 
 export default function ImageCataloguePage() {
   return (
     <main className={styles.shell}>
       <header className={styles.topBar}>
         <div className={styles.topBarInner}>
-          <div className={styles.brandBlock}>
-            <span>Gopalam Jewels</span>
-            <h1>Image Catalogue</h1>
+          <div className={styles.brandArea}>
+            <ChangeTypeButton />
+            <div className={styles.brandBlock}>
+              <span>Gopalam Jewels</span>
+              <h1>Image Catalogue</h1>
+            </div>
           </div>
           <AdminButton />
 

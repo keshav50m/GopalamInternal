@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import ProductPanel from "@/components/ProductLookup";
 
 export default function Page() {
   const [jewelleryType, setJewelleryType] = useState<string | null>(null);
@@ -18,9 +16,12 @@ export default function Page() {
     if (jewelleryType === "casting") {
       window.location.href = "/scanner";
     }
+    if (jewelleryType === "gold") {
+      window.location.href = "/gold/scanner";
+    }
   }, [jewelleryType]);
 
-  const selectType = (type: "casting" | "polki") => {
+  const selectType = (type: "casting" | "polki" | "gold") => {
     localStorage.setItem("jewelleryType", type);
     setJewelleryType(type);
   };
@@ -165,6 +166,28 @@ export default function Page() {
                   Product Management
                   <br />
                   Module
+                </div>
+              </button>
+
+              <button
+                onClick={() => selectType("gold")}
+                style={{
+                  width: "280px",
+                  height: "180px",
+                  borderRadius: "16px",
+                  border: "2px solid #d8c89f",
+                  background: "#ffffff",
+                  cursor: "pointer",
+                  transition: "0.2s",
+                }}
+              >
+                <div style={{ fontSize: "24px", fontWeight: 700, color: "#9a7a30", marginBottom: "15px" }}>
+                  Gold Jewellery
+                </div>
+                <div style={{ color: "#666", fontSize: "15px" }}>
+                  Dedicated Gold
+                  <br />
+                  Jewellery Scanner
                 </div>
               </button>
             </div>
