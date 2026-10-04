@@ -1,15 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, useState } from "react";
 import styles from "@/app/auth.module.css";
 
-const safeReturnTo = (value: string | null) =>
-  value && value.startsWith("/") && !value.startsWith("//") ? value : "/";
-
 function LoginForm() {
-  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -30,7 +25,8 @@ function LoginForm() {
         setError(data.error || "Invalid username or password.");
         return;
       }
-      window.location.href = safeReturnTo(searchParams.get("returnTo"));
+      localStorage.removeItem("jewelleryType");
+      window.location.href = "/?select=1";
     } catch {
       setError("Unable to log in right now.");
     } finally {
@@ -61,5 +57,5 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return <main className={styles.shell}><Suspense><LoginForm /></Suspense></main>;
+  return <main className={styles.shell}><LoginForm /></main>;
 }

@@ -5,7 +5,7 @@ import styles from "./ChangeTypeButton.module.css";
 export default function ChangeTypeButton() {
   const resetType = () => {
     localStorage.removeItem("jewelleryType");
-    window.location.href = "/";
+    window.location.href = "/?changeType=1";
   };
 
   return (

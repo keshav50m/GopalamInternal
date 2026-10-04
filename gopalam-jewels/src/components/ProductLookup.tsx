@@ -169,6 +169,19 @@ export default function ProductPanel() {
   }, []);
 
   useEffect(() => {
+    const navigationEntry = performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    if (navigationEntry?.type === "reload") {
+      clearScannerRows();
+      const initialRows = [createEmptyRow()];
+      setRows(initialRows);
+      latestRowsRef.current = initialRows;
+      previousRowsLengthRef.current = 1;
+      hasLoadedScannerRowsRef.current = true;
+      return;
+    }
+
     const storedRows = readScannerRows();
 
     if (storedRows.length > 0) {

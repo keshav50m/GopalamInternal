@@ -6,10 +6,7 @@ export default function Page() {
   const [jewelleryType, setJewelleryType] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("jewelleryType");
-    if (saved) {
-      setJewelleryType(saved);
-    }
+    localStorage.removeItem("jewelleryType");
   }, []);
 
   useEffect(() => {

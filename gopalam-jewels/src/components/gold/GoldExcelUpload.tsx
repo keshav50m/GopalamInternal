@@ -25,6 +25,11 @@ type Props = {
 const hasGoldColumns = (row: Record<string, unknown>) =>
   GOLD_PRODUCT_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(row, field));
 
+const hasGoldBusinessColumns = (row: Record<string, unknown>) =>
+  GOLD_PRODUCT_FIELDS.slice(1).some((field) =>
+    Object.prototype.hasOwnProperty.call(row, field)
+  );
+
 export default function GoldExcelUpload({ mode, onImport }: Props) {
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -43,7 +48,12 @@ export default function GoldExcelUpload({ mode, onImport }: Props) {
           const barcode = normalizeBarcode(
             sourceRow.BARCODE || sourceRow.Barcode || sourceRow.barcode
           );
-          if (barcode) uniqueRows.set(barcode, { barcode, qrCode: "", data: null });
+          if (barcode) {
+            const data = hasGoldBusinessColumns(sourceRow)
+              ? normalizeGoldProductData({ ...sourceRow, BARCODE: barcode })
+              : null;
+            uniqueRows.set(barcode, { barcode, qrCode: "", data });
+          }
           return;
         }
 
@@ -87,4 +97,3 @@ export default function GoldExcelUpload({ mode, onImport }: Props) {
     />
   );
 }
-

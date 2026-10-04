@@ -20,6 +20,7 @@ import {
   type UploadedProductImage,
 } from "@/utils/uploadProductImage";
 import styles from "./GoldScanner.module.css";
+import type { GoldPDFField, GoldPDFVersion } from "@/utils/generateGoldPDF";
 
 const GOLD_ROWS_STORAGE_KEY = "goldScannerRows";
 
@@ -113,6 +114,15 @@ export default function GoldProductLookup() {
   const [companyName, setCompanyName] = useState("");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [pdfProgress, setPDFProgress] = useState(0);
+  const [pdfVersion, setPDFVersion] = useState<GoldPDFVersion>("version1");
+  const [pdfGridRows, setPDFGridRows] = useState("6");
+  const [pdfGridColumns, setPDFGridColumns] = useState("5");
+  const [pdfGridError, setPDFGridError] = useState("");
+  const [uniqueLotNoForPDF, setUniqueLotNoForPDF] = useState(false);
+  const [selectedPDFFields, setSelectedPDFFields] = useState<Record<GoldPDFField, boolean>>({
+    image: true, barcode: true, lotNo: true, karat: true, stone: true,
+    nw: true, gw: true, stoneWt: true, diamondWt: true, totalTag: true, usd: true,
+  });
   const [error, setError] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ primary: string; fallback: string } | null>(null);
   const latestRowsRef = useRef(rows);
@@ -125,6 +135,26 @@ export default function GoldProductLookup() {
   const uploadTasksRef = useRef(new Set<Promise<void>>());
 
   useEffect(() => {
+    const clearGoldRowsOnRefresh = () => {
+      sessionStorage.removeItem(GOLD_ROWS_STORAGE_KEY);
+    };
+    window.addEventListener("beforeunload", clearGoldRowsOnRefresh);
+    return () => window.removeEventListener("beforeunload", clearGoldRowsOnRefresh);
+  }, []);
+
+  useEffect(() => {
+    const navigationEntry = performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    if (navigationEntry?.type === "reload") {
+      sessionStorage.removeItem(GOLD_ROWS_STORAGE_KEY);
+      const initialRows = [createEmptyRow()];
+      setRows(initialRows);
+      latestRowsRef.current = initialRows;
+      previousRowCountRef.current = initialRows.length;
+      return;
+    }
+
     try {
       const stored = JSON.parse(sessionStorage.getItem(GOLD_ROWS_STORAGE_KEY) || "[]");
       if (Array.isArray(stored) && stored.length > 0) {
@@ -203,6 +233,9 @@ export default function GoldProductLookup() {
       const productsByBarcode = new Map(
         lookup.products.map((product) => [normalizeBarcode(product.barcode), product])
       );
+      const unresolvedBarcodes = targetRows
+        .filter((row) => !row.data && !productsByBarcode.has(normalizeBarcode(row.barcode)))
+        .map((row) => normalizeBarcode(row.barcode));
       setRows((current) => current.map((row) => {
         if (!rowIds.includes(row.id)) return row;
         const product = productsByBarcode.get(normalizeBarcode(row.barcode));
@@ -217,6 +250,9 @@ export default function GoldProductLookup() {
           previewUrl: imageFields.imageUrl,
         };
       }));
+      setError(unresolvedBarcodes.length > 0
+        ? `No saved Gold product found for barcode${unresolvedBarcodes.length === 1 ? "" : "s"}: ${unresolvedBarcodes.join(", ")}`
+        : "");
     } catch (lookupError) {
       console.error("Gold lookup failed:", lookupError);
       setError(lookupError instanceof Error ? lookupError.message : "Gold lookup failed");
@@ -286,12 +322,47 @@ export default function GoldProductLookup() {
   };
 
   const handleExcelImport = async (excelRows: GoldExcelRow[]) => {
-    const imported = excelRows.map((row) => ({
+    let imported = excelRows.map((row) => ({
       ...createEmptyRow(),
       qrCode: row.qrCode,
       barcode: row.barcode,
       data: row.data,
     }));
+
+    try {
+      const lookup = await lookupProducts(
+        imported.map((row) => normalizeBarcode(row.barcode)),
+        imported.map((row) => normalizeGoldLotNo(row.data?.["LOT NO"])).filter(Boolean)
+      );
+      const productsByBarcode = new Map(
+        lookup.products.map((product) => [normalizeBarcode(product.barcode), product])
+      );
+      const unresolved: string[] = [];
+      imported = imported.map((row) => {
+        const barcode = normalizeBarcode(row.barcode);
+        const product = productsByBarcode.get(barcode);
+        const data = row.data || product?.data || null;
+        if (!data) unresolved.push(barcode);
+        const imageFields = getImageFields(
+          product,
+          lookup.lotImages[normalizeGoldLotNo(data?.["LOT NO"])]
+        );
+        return {
+          ...row,
+          barcode: normalizeBarcode(product?.barcode || barcode),
+          data,
+          ...imageFields,
+          previewUrl: imageFields.imageUrl,
+        };
+      });
+      setError(unresolved.length > 0
+        ? `No saved Gold product found for barcode${unresolved.length === 1 ? "" : "s"}: ${unresolved.join(", ")}`
+        : "");
+    } catch (lookupError) {
+      console.error("Gold Excel lookup failed:", lookupError);
+      setError(lookupError instanceof Error ? lookupError.message : "Gold Excel lookup failed");
+    }
+
     setRows((current) => {
       const next = current.length === 0 || (
         current.length === 1 && !current[0].barcode && !current[0].qrCode
@@ -302,8 +373,6 @@ export default function GoldProductLookup() {
       latestRowsRef.current = withEmptyRow;
       return withEmptyRow;
     });
-    await new Promise((resolve) => window.setTimeout(resolve, 0));
-    await hydrateRows(imported.map((row) => row.id), excelRows.some((row) => Boolean(row.data)));
   };
 
   const handleImage = (index: number, file: File) => {
@@ -577,6 +646,53 @@ export default function GoldProductLookup() {
               Company Name
               <input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Enter Company Name" />
             </label>
+            <label style={{ marginTop: "12px" }}>
+              <input
+                type="checkbox"
+                checked={uniqueLotNoForPDF}
+                onChange={(event) => setUniqueLotNoForPDF(event.target.checked)}
+                style={{ width: "auto", marginRight: "7px" }}
+              />
+              Unique Lot No
+            </label>
+            <h3>Select Fields</h3>
+            {(Object.keys(selectedPDFFields) as GoldPDFField[]).map((field) => (
+              <label key={field} style={{ fontWeight: 400 }}>
+                <input
+                  type="checkbox"
+                  checked={selectedPDFFields[field]}
+                  onChange={() => setSelectedPDFFields((current) => ({ ...current, [field]: !current[field] }))}
+                  style={{ width: "auto", marginRight: "7px" }}
+                />
+                {field}
+              </label>
+            ))}
+            <h3>PDF Layout</h3>
+            {([
+              ["version1", "Version 1 – Table Layout"],
+              ["version2", "Version 2 – Catalogue Layout"],
+              ["version3", "Version 3 – Large Product Cards"],
+              ["version4", "Version 4 – Dynamic Image Grid"],
+              ["version5", "Version 5 – Unique Lot Quantity Grid"],
+            ] as Array<[GoldPDFVersion, string]>).map(([version, label]) => (
+              <label key={version} style={{ fontWeight: 400 }}>
+                <input
+                  type="radio"
+                  name="gold-pdf-layout"
+                  checked={pdfVersion === version}
+                  onChange={() => { setPDFVersion(version); setPDFGridError(""); }}
+                  style={{ width: "auto", marginRight: "7px" }}
+                />
+                {label}
+              </label>
+            ))}
+            {(pdfVersion === "version4" || pdfVersion === "version5") ? (
+              <div style={{ display: "flex", gap: "12px", marginTop: "12px" }}>
+                <label style={{ flex: 1 }}>Rows<input type="number" min="1" max="10" value={pdfGridRows} onChange={(event) => { setPDFGridRows(event.target.value); setPDFGridError(""); }} /></label>
+                <label style={{ flex: 1 }}>Columns<input type="number" min="1" max="10" value={pdfGridColumns} onChange={(event) => { setPDFGridColumns(event.target.value); setPDFGridError(""); }} /></label>
+              </div>
+            ) : null}
+            {pdfGridError ? <p className={styles.error}>{pdfGridError}</p> : null}
             <p>PDF Products: {filteredRows.filter((row) => row.data).length}</p>
             {isGeneratingPDF ? <p>Generating PDF… {pdfProgress}%</p> : null}
             <div className={styles.modalActions}>
@@ -584,15 +700,31 @@ export default function GoldProductLookup() {
                 className={styles.saveButton}
                 disabled={isGeneratingPDF || filteredRows.every((row) => !row.data)}
                 onClick={async () => {
+                  const gridRows = Number(pdfGridRows);
+                  const gridColumns = Number(pdfGridColumns);
+                  if (
+                    (pdfVersion === "version4" || pdfVersion === "version5") &&
+                    (!Number.isInteger(gridRows) || !Number.isInteger(gridColumns) ||
+                      gridRows < 1 || gridColumns < 1 || gridRows > 10 || gridColumns > 10)
+                  ) {
+                    setPDFGridError("Rows and Columns must be whole numbers from 1 to 10.");
+                    return;
+                  }
                   setIsGeneratingPDF(true);
                   setPDFProgress(0);
                   try {
                     const { generateGoldPDF } = await import("@/utils/generateGoldPDF");
                     await generateGoldPDF(
                       filteredRows.filter((row) => row.data),
-                      companyName,
-                      priceDiscountPercent,
-                      usdDiscountPercent,
+                      {
+                        version: pdfVersion,
+                        selectedFields: selectedPDFFields,
+                        companyName,
+                        priceDiscountPercent,
+                        usdDiscountPercent,
+                        uniqueLotNo: uniqueLotNoForPDF,
+                        grid: { rows: gridRows, columns: gridColumns },
+                      },
                       setPDFProgress
                     );
                     setShowPDF(false);

@@ -11,10 +11,16 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
+  if (
+    pathname === "/" &&
+    session &&
+    !request.nextUrl.searchParams.has("select") &&
+    !request.nextUrl.searchParams.has("changeType")
+  ) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
   if (isPublicPage || isPublicApi) {
-    if (session && pathname === "/login") {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
     return NextResponse.next();
   }
 

@@ -16,14 +16,14 @@ export async function POST(request: NextRequest) {
     await ensureGoldProductIndexes();
 
     const body = await request.json();
-    const barcodes = Array.from(new Set(
+    const barcodes: string[] = Array.from(new Set<string>(
       (Array.isArray(body.barcodes) ? body.barcodes : [])
-        .map(normalizeBarcode)
+        .map((value: unknown) => normalizeBarcode(value))
         .filter(Boolean)
     ));
-    const lotNos = Array.from(new Set(
+    const lotNos: string[] = Array.from(new Set<string>(
       (Array.isArray(body.lotNos) ? body.lotNos : [])
-        .map(normalizeGoldLotNo)
+        .map((value: unknown) => normalizeGoldLotNo(value))
         .filter(Boolean)
     ));
 
@@ -40,8 +40,17 @@ export async function POST(request: NextRequest) {
 
     for (let index = 0; index < barcodes.length; index += QUERY_BATCH_SIZE) {
       const batch = barcodes.slice(index, index + QUERY_BATCH_SIZE);
+      const compatibleBarcodes: Array<string | number> = [...batch];
+      batch.forEach((barcode) => {
+        if (/^(0|[1-9]\d*)$/.test(barcode)) compatibleBarcodes.push(Number(barcode));
+      });
       products.push(...await db.collection("savedProducts_Gold")
-        .find({ barcode: { $in: batch } })
+        .find({
+          $or: [
+            { barcode: { $in: compatibleBarcodes } },
+            { "data.BARCODE": { $in: compatibleBarcodes } },
+          ],
+        })
         .project({ barcode: 1, image: 1, r2Image: 1, data: 1, sold: 1, updatedAt: 1 })
         .toArray());
     }
@@ -71,6 +80,7 @@ export async function POST(request: NextRequest) {
         );
         return {
           ...resolvedProduct,
+          barcode: normalizeBarcode(product.barcode || product.data?.BARCODE),
           catalogueImage: catalogue?.image || "",
           catalogueR2Image: catalogue?.r2Image || "",
           catalogueResolvedImageUrl: catalogue?.resolvedImageUrl || "",
@@ -94,4 +104,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
