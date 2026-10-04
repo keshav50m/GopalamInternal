@@ -6,6 +6,7 @@ import {
   buildCloudinaryDeliveryUrl,
   CLOUDINARY_THUMBNAIL_TRANSFORMATION,
 } from "@/utils/cloudinaryDelivery";
+import ProviderAwareImage from "@/components/ProviderAwareImage";
 
 const hasDisplayValue = (value: unknown) =>
   value !== null && value !== undefined && value !== "";
@@ -94,9 +95,14 @@ export default function ProductTable({
               </label>
 
               {row.previewUrl || row.imageUrl ? (
-                <img
-                  src={buildCloudinaryDeliveryUrl(
+                <ProviderAwareImage
+                  alt={`Product ${row.barcode || row.data?.ITEMNO || "image"}`}
+                  primaryUrl={buildCloudinaryDeliveryUrl(
                     row.previewUrl || row.imageUrl,
+                    CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                  )}
+                  fallbackUrl={buildCloudinaryDeliveryUrl(
+                    row.fallbackImageUrl || "",
                     CLOUDINARY_THUMBNAIL_TRANSFORMATION
                   )}
                   loading="lazy"
@@ -107,7 +113,10 @@ export default function ProductTable({
                     cursor: "pointer",        // ✅ THIS IS KEY
                     display: "block"          // (fix for some browsers)
                   }}
-                  onClick={() => setSelectedImage(row.previewUrl || row.imageUrl)}
+                  onClick={() => setSelectedImage({
+                    primaryUrl: row.previewUrl || row.imageUrl,
+                    fallbackUrl: row.fallbackImageUrl || "",
+                  })}
                 />
               ) : (
                 <div style={{ fontSize: "12px", color: "#888", marginTop: "6px" }}>

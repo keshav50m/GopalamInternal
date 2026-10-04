@@ -6,21 +6,19 @@ import {
 } from "@/utils/cloudinaryDelivery";
 import {
     getOrCreateBoundedCacheEntry,
+    fetchImageBlob,
     imageLoadProgress,
     pdfDrawProgress,
     preloadWithConcurrency,
+    loadWithImageFallback,
     type PDFProgressCallback,
 } from "@/utils/pdfImagePipeline";
 
 
-const compressImage = async (src: string, quality = 0.5, maxWidth = 600) => {
-    const response = await fetch(src);
-    if (!response.ok) {
-        throw new Error(`Image request failed with status ${response.status}`);
-    }
-    const blob = await response.blob();
-
-    return new Promise<string>((resolve, reject) => {
+const compressImageCandidate = async (src: string, quality = 0.5, maxWidth = 600) => {
+    const blob = await fetchImageBlob(src);
+    if (!blob) return null;
+    return new Promise<string | null>((resolve) => {
         const img = new Image();
         const objectUrl = URL.createObjectURL(blob);
         img.src = objectUrl;
@@ -40,26 +38,34 @@ const compressImage = async (src: string, quality = 0.5, maxWidth = 600) => {
         };
         img.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            reject(new Error("Image could not be decoded"));
+            resolve(null);
         };
     });
 };
 
 const version1ImageCache = new Map<string, Promise<string | null>>();
 
-const getVersion1Image = (source: string) => {
+const getVersion1Image = (source: string, fallbackSource = "") => {
     const optimizedSource = buildCloudinaryDeliveryUrl(
         source,
         CLOUDINARY_PDF_TRANSFORMATION
     );
     const cacheKey = getCloudinaryAssetKey(optimizedSource);
+    const optimizedFallback = buildCloudinaryDeliveryUrl(
+        fallbackSource,
+        CLOUDINARY_PDF_TRANSFORMATION
+    );
 
     return getOrCreateBoundedCacheEntry(
         version1ImageCache,
         cacheKey,
         async () => {
             try {
-                return await compressImage(optimizedSource, 0.5, 600);
+                return await loadWithImageFallback(
+                    optimizedSource,
+                    optimizedFallback,
+                    (candidate) => compressImageCandidate(candidate, 0.5, 600)
+                );
             } catch (error) {
                 console.error(error);
                 return null;
@@ -76,7 +82,7 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
     const pdf = new jsPDF("p", "mm", "a4");
     onProgress?.(5);
 
-    const uniqueImages = new Map<string, string>();
+    const uniqueImages = new Map<string, { source: string; fallback: string }>();
     if (selectedFields.image) {
         rows.forEach((row) => {
             const source = String(row.imageUrl || row.previewUrl || "").trim();
@@ -88,14 +94,14 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
             );
             uniqueImages.set(
                 getCloudinaryAssetKey(optimizedSource),
-                source
+                { source, fallback: String(row.fallbackImageUrl || "").trim() }
             );
         });
     }
 
     await preloadWithConcurrency(
         [...uniqueImages.values()],
-        (source) => getVersion1Image(source),
+        ({ source, fallback }) => getVersion1Image(source, fallback),
         (completed, total) =>
             onProgress?.(imageLoadProgress(completed, total))
     );
@@ -266,7 +272,7 @@ export const generatePDF = async (rows: any[], selectedFields: Record<string, bo
         let compressedImg = null;
 
         if (imgSrc && selectedFields.image) {
-            compressedImg = await getVersion1Image(imgSrc);
+            compressedImg = await getVersion1Image(imgSrc, row.fallbackImageUrl || "");
 
             if (compressedImg) {
                 pdf.addImage(

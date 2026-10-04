@@ -6,6 +6,8 @@ import {
   buildCloudinaryDeliveryUrl,
   CLOUDINARY_THUMBNAIL_TRANSFORMATION,
 } from "@/utils/cloudinaryDelivery";
+import ProviderAwareImage from "@/components/ProviderAwareImage";
+import { resolveProductImageCandidates } from "@/utils/resolveProductImage";
 
 type Props = {
   products: SearchProduct[];
@@ -61,7 +63,7 @@ export default function SearchResults({
             </tr>
           ) : (
             products.map((product) => {
-              const image = product.imageCatalogueImage || product.image || "";
+              const image = resolveProductImageCandidates(product, products);
               const data = product.data || {};
 
               return (
@@ -77,11 +79,15 @@ export default function SearchResults({
                     />
                   </td>
                   <td>
-                    {image ? (
-                      <img
+                    {image.primaryUrl ? (
+                      <ProviderAwareImage
                         className={styles.productImage}
-                        src={buildCloudinaryDeliveryUrl(
-                          image,
+                        primaryUrl={buildCloudinaryDeliveryUrl(
+                          image.primaryUrl,
+                          CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                        )}
+                        fallbackUrl={buildCloudinaryDeliveryUrl(
+                          image.fallbackUrl,
                           CLOUDINARY_THUMBNAIL_TRANSFORMATION
                         )}
                         loading="lazy"

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import QRUpdateReview, { type QRUpdateConflict } from "@/components/QRUpdateReview";
-import { resolveProductImage } from "@/utils/resolveProductImage";
+import { resolveProductImageCandidates } from "@/utils/resolveProductImage";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
 import { getChangedQRFields, parseQRCode } from "@/utils/qrProductData";
 
@@ -69,12 +69,16 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
         if (!currentProduct) return;
         const changedFields = getChangedQRFields(currentProduct.data, parsed);
         if (changedFields.length === 0) return;
+        const currentImage = resolveProductImageCandidates(currentProduct, matchedProducts);
         nextConflicts.push({
           id: `${importId}:${barcode}`,
           barcode,
           currentProduct,
           newData: parsed,
-          currentImage: resolveProductImage(currentProduct, matchedProducts),
+          currentImage: currentImage.primaryUrl,
+          currentFallbackImage: currentImage.fallbackUrl,
+          currentCloudinaryImage: currentImage.image,
+          currentR2Image: currentImage.r2Image,
           changedFields: [...changedFields],
           imageChoice: "existing",
           newImageFile: null,
@@ -89,13 +93,16 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
         const match: any = productsByBarcode.get(barcode);
         const conflict = conflictByBarcode.get(barcode);
         const itemNo = normalizeItemNo(row.data?.ITEMNO);
-        const fallbackProduct = { barcode, data: row.data, imageCatalogueImage: itemImages[itemNo] || "" };
-        const resolvedImage = resolveProductImage(match || fallbackProduct, matchedProducts);
+        const fallbackProduct = { barcode, data: row.data, ...(lookupData.itemImageCandidates?.[itemNo] || { imageCatalogueImage: itemImages[itemNo] || "" }) };
+        const resolvedImage = resolveProductImageCandidates(match || fallbackProduct, matchedProducts);
         const updatedRow = {
           ...row,
           data: match?.data || row.data,
-          imageUrl: row.imageUrl || row.previewUrl || resolvedImage,
-          previewUrl: row.previewUrl || row.imageUrl || resolvedImage,
+          image: resolvedImage.image,
+          r2Image: resolvedImage.r2Image,
+          imageUrl: row.imageUrl || row.previewUrl || resolvedImage.primaryUrl,
+          previewUrl: row.previewUrl || row.imageUrl || resolvedImage.primaryUrl,
+          fallbackImageUrl: row.fallbackImageUrl || resolvedImage.fallbackUrl,
           ...(conflict ? { __qrUpdateConflictId: conflict.id } : {}),
         };
         delete updatedRow.__qrExcelImportId;
@@ -119,7 +126,7 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
   const changeConflict = (id: string, patch: Partial<QRUpdateConflict>) =>
     setConflicts((current) => current.map((conflict) => conflict.id === id ? { ...conflict, ...patch } : conflict));
 
-  const resolveConflicts = (resolved: Array<{ id: string; barcode: string; newData: any; image: string; r2Image?: string }>) => {
+  const resolveConflicts = (resolved: Array<{ id: string; barcode: string; newData: any; image: string; r2Image?: string; resolvedImageUrl?: string; fallbackImageUrl?: string }>) => {
     const resolvedById = new Map(resolved.map((item) => [item.id, item]));
     setRows((currentRows) => currentRows.map((row) => {
       const result = resolvedById.get(row.__qrUpdateConflictId);
@@ -128,8 +135,10 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
         ...row,
         barcode: result.barcode,
         data: result.newData,
-        imageUrl: result.image,
-        previewUrl: result.image,
+        imageUrl: result.resolvedImageUrl || result.image,
+        previewUrl: result.resolvedImageUrl || result.image,
+        fallbackImageUrl: result.fallbackImageUrl || "",
+        image: result.image,
         ...(Object.prototype.hasOwnProperty.call(result, "r2Image")
           ? { r2Image: String(result.r2Image || "") }
           : {}),

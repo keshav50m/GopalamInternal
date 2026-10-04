@@ -19,7 +19,13 @@ export type SearchProduct = {
   _id: string;
   barcode?: string | number;
   image?: string;
+  r2Image?: string;
+  resolvedImageUrl?: string;
+  fallbackImageUrl?: string;
   imageCatalogueImage?: string;
+  imageCatalogueR2Image?: string;
+  imageCatalogueResolvedImageUrl?: string;
+  imageCatalogueFallbackImageUrl?: string;
   data?: {
     BARCODE?: string;
     ITEMNO?: string;

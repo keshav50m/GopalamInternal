@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { uploadImageToR2 } from "@/lib/r2";
+import { resolveConfiguredImageCandidates } from "@/lib/imageRead";
 
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -155,6 +156,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const readCandidates = resolveConfiguredImageCandidates(cloudinaryUrl, r2Url);
     return NextResponse.json({
       success: true,
       provider,
@@ -162,6 +164,8 @@ export async function POST(request: NextRequest) {
       cloudinaryUrl,
       r2Url,
       r2ShadowStatus,
+      resolvedImageUrl: readCandidates.primaryUrl || result.imageUrl,
+      fallbackImageUrl: readCandidates.fallbackUrl,
     });
   } catch (error) {
     console.error("Image upload failed", {

@@ -7,7 +7,8 @@
     "build": "next build",
     "seed:admin": "node scripts/create-initial-admin.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:image-provider": "node --test --experimental-strip-types tests/imageProvider.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",

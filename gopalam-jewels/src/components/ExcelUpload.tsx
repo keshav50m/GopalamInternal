@@ -1,6 +1,6 @@
 "use client";
 import * as XLSX from "xlsx";
-import { resolveProductImage } from "@/utils/resolveProductImage";
+import { resolveProductImageCandidates } from "@/utils/resolveProductImage";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
 
 export default function ExcelUpload({ setRows }: any) {
@@ -74,7 +74,7 @@ export default function ExcelUpload({ setRows }: any) {
                 const match = productsByBarcode.get(
                     normalizeBarcode(row.barcode)
                 );
-                const resolvedImage = resolveProductImage(
+                const resolvedImage = resolveProductImageCandidates(
                     match || { barcode: row.barcode, data: null },
                     matchedProducts
                 );
@@ -83,10 +83,15 @@ export default function ExcelUpload({ setRows }: any) {
                 );
                 const updatedRow = {
                     ...row,
-                    imageUrl: hasCurrentImage ? row.imageUrl : resolvedImage,
+                    image: resolvedImage.image || row.image || "",
+                    r2Image: resolvedImage.r2Image || row.r2Image || "",
+                    imageUrl: hasCurrentImage ? row.imageUrl : resolvedImage.primaryUrl,
                     previewUrl: hasCurrentImage
                         ? row.previewUrl || row.imageUrl
-                        : resolvedImage,
+                        : resolvedImage.primaryUrl,
+                    fallbackImageUrl: hasCurrentImage
+                        ? row.fallbackImageUrl || ""
+                        : resolvedImage.fallbackUrl,
                     data: (match as any)?.data || null,
                 };
                 delete updatedRow.__barcodeExcelImportId;

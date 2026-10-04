@@ -6,6 +6,7 @@ import { findCatalogueImagesByItemNos } from "@/lib/imageCatalogueQueries";
 import clientPromise from "@/lib/mongodb";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
 import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+import { withResolvedImageFields } from "@/lib/imageRead";
 
 const BARCODE_QUERY_BATCH_SIZE = 1000;
 const normalizeItemNo = (value: unknown) =>
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     const imageByItemNo = new Map(
       catalogueItems.map((item: any) => [
         normalizeItemNo(item.itemNo),
-        normalizeStoredImageUrl(item.image),
+        withResolvedImageFields(item),
       ])
     );
     const itemNosWithSavedImages = new Set<string>();
@@ -89,22 +90,36 @@ export async function POST(request: NextRequest) {
       const itemNo = normalizeItemNo(product.data?.ITEMNO);
       const image = normalizeStoredImageUrl(product.image);
       if (itemNo && image && !itemNosWithSavedImages.has(itemNo)) {
-        imageByItemNo.set(itemNo, image);
+        imageByItemNo.set(itemNo, withResolvedImageFields(product));
         itemNosWithSavedImages.add(itemNo);
       }
     });
 
-    const itemImages = Object.fromEntries(imageByItemNo);
+    const itemImages = Object.fromEntries(
+      [...imageByItemNo].map(([itemNo, item]) => [itemNo, item.resolvedImageUrl || ""])
+    );
+    const itemImageCandidates = Object.fromEntries(
+      [...imageByItemNo].map(([itemNo, item]) => [itemNo, {
+        image: item.image || "",
+        r2Image: item.r2Image || "",
+        resolvedImageUrl: item.resolvedImageUrl || "",
+        fallbackImageUrl: item.fallbackImageUrl || "",
+      }])
+    );
 
     return NextResponse.json({
       products: products.map((product: any) => {
         const itemNo = normalizeItemNo(product.data?.ITEMNO);
         return {
-          ...product,
-          imageCatalogueImage: imageByItemNo.get(itemNo) || "",
+          ...withResolvedImageFields(product),
+          imageCatalogueImage: imageByItemNo.get(itemNo)?.image || "",
+          imageCatalogueR2Image: imageByItemNo.get(itemNo)?.r2Image || "",
+          imageCatalogueResolvedImageUrl: imageByItemNo.get(itemNo)?.resolvedImageUrl || "",
+          imageCatalogueFallbackImageUrl: imageByItemNo.get(itemNo)?.fallbackImageUrl || "",
         };
       }),
       itemImages,
+      itemImageCandidates,
     });
   } catch (error) {
     console.error("Barcode lookup failed:", error);

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { uploadProductImage } from "@/utils/uploadProductImage";
 import { QR_PRODUCT_FIELDS, type QRProductData } from "@/utils/qrProductData";
 import styles from "./QRUpdateReview.module.css";
+import ProviderAwareImage from "@/components/ProviderAwareImage";
 
 export type QRUpdateConflict = {
   id: string;
@@ -13,6 +14,9 @@ export type QRUpdateConflict = {
   currentProduct: { data?: Record<string, unknown>; image?: string; r2Image?: string };
   newData: QRProductData;
   currentImage: string;
+  currentFallbackImage?: string;
+  currentCloudinaryImage?: string;
+  currentR2Image?: string;
   changedFields: string[];
   imageChoice: "existing" | "new";
   newImageFile?: File | null;
@@ -26,7 +30,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onChange: (id: string, patch: Partial<QRUpdateConflict>) => void;
-  onResolved: (resolved: Array<{ id: string; barcode: string; newData: QRProductData; image: string; r2Image?: string }>) => void;
+  onResolved: (resolved: Array<{ id: string; barcode: string; newData: QRProductData; image: string; r2Image?: string; resolvedImageUrl?: string; fallbackImageUrl?: string }>) => void;
 };
 
 const LABELS: Record<string, string> = {
@@ -47,6 +51,8 @@ export default function QRUpdateReview({ conflicts, open, onClose, onChange, onR
       image: string;
       r2Image?: string;
       replaceImage: boolean;
+      resolvedImageUrl?: string;
+      fallbackImageUrl?: string;
     }> = [];
 
     for (const conflict of targets) {
@@ -59,20 +65,22 @@ export default function QRUpdateReview({ conflicts, open, onClose, onChange, onR
           const uploadedImage = await uploadProductImage(conflict.newImageFile);
           ready.push({
             conflict,
-            image: uploadedImage.imageUrl,
+            image: uploadedImage.cloudinaryUrl,
             ...(Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")
               ? { r2Image: uploadedImage.r2Image || "" }
               : {}),
             replaceImage: true,
+            resolvedImageUrl: uploadedImage.resolvedImageUrl,
+            fallbackImageUrl: uploadedImage.fallbackImageUrl,
           });
         } else {
           ready.push({
             conflict,
-            image: conflict.currentImage || "",
-            ...(Object.prototype.hasOwnProperty.call(conflict.currentProduct, "r2Image")
-              ? { r2Image: String(conflict.currentProduct.r2Image || "") }
-              : {}),
+            image: String(conflict.currentCloudinaryImage || conflict.currentProduct.image || ""),
+            r2Image: String(conflict.currentR2Image || conflict.currentProduct.r2Image || ""),
             replaceImage: false,
+            resolvedImageUrl: conflict.currentImage,
+            fallbackImageUrl: conflict.currentFallbackImage || "",
           });
         }
       } catch (error) {
@@ -101,11 +109,13 @@ export default function QRUpdateReview({ conflicts, open, onClose, onChange, onR
       const results = Array.isArray(data.results) ? data.results : [];
       const successes = results.filter((result: any) => result.success);
       const successBarcodes = new Set(successes.map((result: any) => result.barcode));
-      const resolved = ready.filter(({ conflict }) => successBarcodes.has(conflict.barcode)).map(({ conflict, image, r2Image, replaceImage }) => ({
+      const resolved = ready.filter(({ conflict }) => successBarcodes.has(conflict.barcode)).map(({ conflict, image, r2Image, replaceImage, resolvedImageUrl, fallbackImageUrl }) => ({
         id: conflict.id,
         barcode: conflict.barcode,
         newData: conflict.newData,
         image,
+        resolvedImageUrl,
+        fallbackImageUrl,
         ...(r2Image !== undefined
           ? { r2Image }
           : !replaceImage && Object.prototype.hasOwnProperty.call(conflict.currentProduct, "r2Image")
@@ -147,7 +157,7 @@ export default function QRUpdateReview({ conflicts, open, onClose, onChange, onR
               {QR_PRODUCT_FIELDS.map((field) => { const changed = conflict.changedFields.includes(field); return <tr key={field}><td>{LABELS[field]}</td><td className={changed ? styles.changed : undefined}>{String(conflict.currentProduct.data?.[field] ?? "—")}</td><td className={changed ? styles.changed : undefined}>{String(conflict.newData[field] || "—")}</td></tr>; })}
             </tbody></table>
             <div className={styles.imageGrid}>
-              <div><strong>Current Image</strong><div className={styles.imageBox}>{conflict.currentImage ? <img src={conflict.currentImage} alt={`Current product ${conflict.barcode}`} /> : "No current image"}</div></div>
+              <div><strong>Current Image</strong><div className={styles.imageBox}>{conflict.currentImage ? <ProviderAwareImage primaryUrl={conflict.currentImage} fallbackUrl={conflict.currentFallbackImage} alt={`Current product ${conflict.barcode}`} /> : "No current image"}</div></div>
               <div className={styles.options}><strong>Image Option</strong>
                 <label><input type="radio" checked={conflict.imageChoice === "existing"} disabled={busy} onChange={() => onChange(conflict.id, { imageChoice: "existing", error: "" })} />Keep Existing Image</label>
                 <label><input type="radio" checked={conflict.imageChoice === "new"} disabled={busy} onChange={() => onChange(conflict.id, { imageChoice: "new", error: "" })} />Upload New Image</label>

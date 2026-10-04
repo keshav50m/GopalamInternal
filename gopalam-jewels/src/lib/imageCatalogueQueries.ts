@@ -17,7 +17,7 @@ export const findCatalogueImagesByItemNos = async (
 
   const exactMatches = await collection
     .find({ itemNo: { $in: itemNos } })
-    .project({ itemNo: 1, image: 1 })
+    .project({ itemNo: 1, image: 1, r2Image: 1 })
     .toArray();
   const matchedItemNos = new Set(
     exactMatches.map((item) => normalizeItemNo(item.itemNo))
@@ -37,7 +37,7 @@ export const findCatalogueImagesByItemNos = async (
         },
       })),
     })
-    .project({ itemNo: 1, image: 1 })
+    .project({ itemNo: 1, image: 1, r2Image: 1 })
     .toArray();
 
   return [...exactMatches, ...compatibilityMatches];

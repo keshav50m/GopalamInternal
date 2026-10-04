@@ -5,7 +5,7 @@ import { calculateTotals } from "@/utils/calculateTotals";
 import ProductTable from "@/components/productTable";
 import ExcelUpload from "@/components/ExcelUpload";
 import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
-import { resolveProductImage } from "@/utils/resolveProductImage";
+import { resolveProductImageCandidates } from "@/utils/resolveProductImage";
 import { applyDiscount } from "@/utils/applyDiscount";
 import { getFileUploadKey } from "@/utils/cloudinaryDelivery";
 import {
@@ -20,12 +20,16 @@ import {
   readScannerRows,
   writeScannerRows,
 } from "@/utils/scannerRowStorage";
+import ProviderAwareImage from "@/components/ProviderAwareImage";
 
 const createEmptyRow = () => ({
   qrCode: "",
   barcode: "",
   imageUrl: "",
   previewUrl: "",
+  fallbackImageUrl: "",
+  image: "",
+  r2Image: "",
   data: null,
 });
 
@@ -142,7 +146,10 @@ export default function ProductPanel() {
   const [pdfGridColumns, setPdfGridColumns] = useState("5");
   const [pdfGridError, setPdfGridError] = useState("");
   const [uniqueItemNoForPDF, setUniqueItemNoForPDF] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{
+    primaryUrl: string;
+    fallbackUrl: string;
+  } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [imageFilter, setImageFilter] =
@@ -250,9 +257,11 @@ export default function ProductPanel() {
       const fallbackProduct = {
         barcode,
         data: parsed,
-        imageCatalogueImage: lookupData.itemImages?.[itemNo] || "",
+        ...(lookupData.itemImageCandidates?.[itemNo] || {
+          imageCatalogueImage: lookupData.itemImages?.[itemNo] || "",
+        }),
       };
-      const matchedImage = resolveProductImage(
+      const matchedImage = resolveProductImageCandidates(
         match || fallbackProduct,
         matchedProducts
       );
@@ -264,8 +273,11 @@ export default function ProductPanel() {
                 ...row,
                 barcode: normalizeBarcode(match?.barcode || barcode),
                 data: match?.data || parsed,
-                imageUrl: matchedImage,
-                previewUrl: matchedImage,
+                image: matchedImage.image,
+                r2Image: matchedImage.r2Image,
+                imageUrl: matchedImage.primaryUrl,
+                previewUrl: matchedImage.primaryUrl,
+                fallbackImageUrl: matchedImage.fallbackUrl,
               }
             : row
         )
@@ -414,15 +426,18 @@ export default function ProductPanel() {
           return nextRows;
         }
 
-        const matchedImage = resolveProductImage(match, [
+        const matchedImage = resolveProductImageCandidates(match, [
           match,
         ]);
         nextRows[index] = {
           ...currentRow,
           barcode: normalizeBarcode(match.barcode),
           data: match.data,
-          imageUrl: matchedImage,
-          previewUrl: matchedImage,
+          image: matchedImage.image,
+          r2Image: matchedImage.r2Image,
+          imageUrl: matchedImage.primaryUrl,
+          previewUrl: matchedImage.primaryUrl,
+          fallbackImageUrl: matchedImage.fallbackUrl,
         };
 
         if (index === currentRows.length - 1) {
@@ -495,7 +510,7 @@ export default function ProductPanel() {
       }
 
       const uploadedImage = await scannerUploadCacheRef.current.get(uploadKey)!;
-      const imageUrl = uploadedImage.imageUrl;
+      const imageUrl = uploadedImage.resolvedImageUrl;
       setRows((currentRows) => {
         const nextRows = currentRows.map((currentRow) => {
           const isSelectedRow = currentRow.previewUrl === previewUrl;
@@ -516,10 +531,12 @@ export default function ProductPanel() {
 
           return {
             ...currentRow,
+            image: uploadedImage.cloudinaryUrl,
             imageUrl,
             ...(Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")
               ? { r2Image: uploadedImage.r2Image || "" }
               : {}),
+            fallbackImageUrl: uploadedImage.fallbackImageUrl,
             previewUrl: isSelectedRow
               ? currentRow.previewUrl
               : imageUrl,
@@ -559,7 +576,11 @@ export default function ProductPanel() {
     );
     const toSave = currentRowsToSave.filter(r => r.barcode && r.data).map(r => ({
       barcode: r.barcode,
-      image: r.imageUrl || "",
+      image:
+        r.image ||
+        r.cloudinaryUrl ||
+        (r.r2Image && r.fallbackImageUrl ? r.fallbackImageUrl : r.imageUrl) ||
+        "",
       data: r.data,
       ...(Object.prototype.hasOwnProperty.call(r, "r2Image")
         ? { r2Image: String(r.r2Image || "") }
@@ -1429,8 +1450,9 @@ export default function ProductPanel() {
             zIndex: 2000
           }}
         >
-          <img
-            src={selectedImage}
+          <ProviderAwareImage
+            primaryUrl={selectedImage.primaryUrl}
+            fallbackUrl={selectedImage.fallbackUrl}
             alt="zoom"
             style={{
               maxWidth: "90%",

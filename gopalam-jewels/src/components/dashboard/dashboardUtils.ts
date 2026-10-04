@@ -5,7 +5,11 @@ export const getBarcode = (product: SavedProduct) =>
   String(product.barcode || product.data?.BARCODE || "").trim();
 
 export const hasImage = (product: SavedProduct) =>
-  Boolean(normalizeStoredImageUrl(product.image));
+  Boolean(
+    normalizeStoredImageUrl(product.resolvedImageUrl) ||
+    normalizeStoredImageUrl(product.image) ||
+    normalizeStoredImageUrl(product.r2Image)
+  );
 
 export const getStoneName = (product: SavedProduct) =>
   String(product.data?.["STONE NAME"] || "Unknown").trim() || "Unknown";

@@ -3,9 +3,15 @@ import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
 type ProductLike = {
   barcode?: string | number;
   image?: string;
+  r2Image?: string;
   imageUrl?: string;
   previewUrl?: string;
+  fallbackImageUrl?: string;
+  resolvedImageUrl?: string;
   imageCatalogueImage?: string;
+  imageCatalogueR2Image?: string;
+  imageCatalogueResolvedImageUrl?: string;
+  imageCatalogueFallbackImageUrl?: string;
   data?: {
     BARCODE?: string | number;
     ITEMNO?: string | number;
@@ -22,10 +28,43 @@ const getItemNo = (product: ProductLike) => normalize(product.data?.ITEMNO);
 const getBarcodeImage = (product: ProductLike) =>
   normalizeStoredImageUrl(product.imageUrl) ||
   normalizeStoredImageUrl(product.previewUrl) ||
-  normalizeStoredImageUrl(product.image);
+  normalizeStoredImageUrl(product.resolvedImageUrl) ||
+  normalizeStoredImageUrl(product.image) ||
+  normalizeStoredImageUrl(product.r2Image);
+
+const getBarcodeFallbackImage = (product: ProductLike, primaryUrl: string) =>
+  [
+    product.fallbackImageUrl,
+    product.resolvedImageUrl,
+    product.image,
+    product.r2Image,
+  ]
+    .map(normalizeStoredImageUrl)
+    .find((url) => url && url !== primaryUrl) || "";
+
+const getBarcodeStoragePair = (product: ProductLike) => ({
+  image: normalizeStoredImageUrl(product.image),
+  r2Image: normalizeStoredImageUrl(product.r2Image),
+});
 
 const getCatalogueImage = (product: ProductLike) =>
-  normalizeStoredImageUrl(product.imageCatalogueImage);
+  normalizeStoredImageUrl(product.imageCatalogueResolvedImageUrl) ||
+  normalizeStoredImageUrl(product.imageCatalogueImage) ||
+  normalizeStoredImageUrl(product.imageCatalogueR2Image);
+
+const getCatalogueFallbackImage = (product: ProductLike, primaryUrl: string) =>
+  [
+    product.imageCatalogueFallbackImageUrl,
+    product.imageCatalogueImage,
+    product.imageCatalogueR2Image,
+  ]
+    .map(normalizeStoredImageUrl)
+    .find((url) => url && url !== primaryUrl) || "";
+
+const getCatalogueStoragePair = (product: ProductLike) => ({
+  image: normalizeStoredImageUrl(product.imageCatalogueImage),
+  r2Image: normalizeStoredImageUrl(product.imageCatalogueR2Image),
+});
 
 type ProductImageIndex = {
   byBarcode: Map<string, ProductLike>;
@@ -60,17 +99,21 @@ const getProductImageIndex = (products: ProductLike[]) => {
   return index;
 };
 
-export const resolveProductImage = (
+export const resolveProductImageCandidates = (
   product: ProductLike | null | undefined,
   products: ProductLike[]
 ) => {
-  if (!product) return "";
+  if (!product) return { primaryUrl: "", fallbackUrl: "", image: "", r2Image: "" };
 
   const barcode = getBarcode(product);
   const itemNo = getItemNo(product);
   const directBarcodeImage = getBarcodeImage(product);
 
-  if (directBarcodeImage) return directBarcodeImage;
+  if (directBarcodeImage) return {
+    primaryUrl: directBarcodeImage,
+    fallbackUrl: getBarcodeFallbackImage(product, directBarcodeImage),
+    ...getBarcodeStoragePair(product),
+  };
 
   const productIndex = getProductImageIndex(products);
 
@@ -80,21 +123,41 @@ export const resolveProductImage = (
 
   const barcodeImage = barcodeMatch ? getBarcodeImage(barcodeMatch) : "";
 
-  if (barcodeImage) return barcodeImage;
+  if (barcodeImage && barcodeMatch) return {
+    primaryUrl: barcodeImage,
+    fallbackUrl: getBarcodeFallbackImage(barcodeMatch, barcodeImage),
+    ...getBarcodeStoragePair(barcodeMatch),
+  };
 
-  if (!itemNo) return "";
+  if (!itemNo) return { primaryUrl: "", fallbackUrl: "", image: "", r2Image: "" };
 
   const itemMatches = productIndex.byItemNo.get(itemNo) || [];
 
-  const itemBarcodeImage = itemMatches
-    .map(getBarcodeImage)
-    .find(Boolean);
+  const itemBarcodeMatch = itemMatches.find((candidate) => getBarcodeImage(candidate));
+  const itemBarcodeImage = itemBarcodeMatch ? getBarcodeImage(itemBarcodeMatch) : "";
 
-  if (itemBarcodeImage) return itemBarcodeImage;
+  if (itemBarcodeImage && itemBarcodeMatch) return {
+    primaryUrl: itemBarcodeImage,
+    fallbackUrl: getBarcodeFallbackImage(itemBarcodeMatch, itemBarcodeImage),
+    ...getBarcodeStoragePair(itemBarcodeMatch),
+  };
 
-  return (
-    getCatalogueImage(product) ||
-    itemMatches.map(getCatalogueImage).find(Boolean) ||
-    ""
-  );
+  const catalogueProduct = getCatalogueImage(product)
+    ? product
+    : itemMatches.find((candidate) => getCatalogueImage(candidate));
+  const catalogueImage = catalogueProduct ? getCatalogueImage(catalogueProduct) : "";
+  return {
+    primaryUrl: catalogueImage,
+    fallbackUrl: catalogueProduct
+      ? getCatalogueFallbackImage(catalogueProduct, catalogueImage)
+      : "",
+    ...(catalogueProduct
+      ? getCatalogueStoragePair(catalogueProduct)
+      : { image: "", r2Image: "" }),
+  };
 };
+
+export const resolveProductImage = (
+  product: ProductLike | null | undefined,
+  products: ProductLike[]
+) => resolveProductImageCandidates(product, products).primaryUrl;

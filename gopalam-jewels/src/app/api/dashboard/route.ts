@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { ensureProductIndexes } from "@/lib/databaseIndexes";
 import clientPromise from "@/lib/mongodb";
+import { withResolvedImageFields } from "@/lib/imageRead";
 
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -21,8 +22,9 @@ const stringExpression = (field: string) => ({
 });
 
 const hasDurableImageExpression = {
+  $or: ["$image", "$r2Image"].map((field) => ({
   $let: {
-    vars: { imageUrl: stringExpression("$image") },
+    vars: { imageUrl: stringExpression(field) },
     in: {
       $and: [
         { $ne: ["$$imageUrl", ""] },
@@ -40,6 +42,7 @@ const hasDurableImageExpression = {
       ],
     },
   },
+  })),
 };
 
 const getIndiaDateKeys = () => {
@@ -64,6 +67,7 @@ const productProjection = {
   _id: 1,
   barcode: 1,
   image: 1,
+  r2Image: 1,
   data: 1,
   updatedAt: 1,
 };
@@ -94,7 +98,7 @@ export async function GET(request: NextRequest) {
         .project(productProjection)
         .toArray();
 
-      return NextResponse.json({ products });
+      return NextResponse.json({ products: products.map(withResolvedImageFields) });
     }
 
     const dateKeys = getIndiaDateKeys();
@@ -233,8 +237,8 @@ export async function GET(request: NextRequest) {
       },
       stoneDistribution: dashboardData?.stoneDistribution || [],
       uploadTrend: dashboardData?.uploadTrend || [],
-      missingImages: dashboardData?.missingImages || [],
-      recentUploads: dashboardData?.recentUploads || [],
+      missingImages: (dashboardData?.missingImages || []).map(withResolvedImageFields),
+      recentUploads: (dashboardData?.recentUploads || []).map(withResolvedImageFields),
     });
   } catch (error) {
     console.error("Dashboard GET Error:", error);

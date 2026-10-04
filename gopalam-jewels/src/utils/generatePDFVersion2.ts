@@ -4,9 +4,11 @@ import {
   getCloudinaryAssetKey,
 } from "@/utils/cloudinaryDelivery";
 import {
+  fetchImageBlob,
   getOrCreateBoundedCacheEntry,
   imageLoadProgress,
   pdfDrawProgress,
+  loadWithImageFallback,
   preloadWithConcurrency,
   type PDFProgressCallback,
 } from "@/utils/pdfImagePipeline";
@@ -17,6 +19,7 @@ type ProductRow = {
   barcode?: string | number;
   imageUrl?: string;
   previewUrl?: string;
+  fallbackImageUrl?: string;
   data?: Record<string, unknown> | null;
 };
 
@@ -121,20 +124,17 @@ const truncateToWidth = (
 const loadImage = async (
   src: string,
   cache: Map<string, Promise<LoadedImage | null>>,
-  cacheKey = src
+  cacheKey = src,
+  fallbackSrc = ""
 ) => {
   return getOrCreateBoundedCacheEntry(
     cache,
     cacheKey,
-    () =>
+    () => loadWithImageFallback(src, fallbackSrc, (candidate) =>
       new Promise<LoadedImage | null>(async (resolve) => {
         try {
-          const response = await fetch(src);
-          if (!response.ok) {
-            resolve(null);
-            return;
-          }
-          const blob = await response.blob();
+          const blob = await fetchImageBlob(candidate);
+          if (!blob) return resolve(null);
           const objectUrl = URL.createObjectURL(blob);
 
           const image = new Image();
@@ -165,7 +165,7 @@ const loadImage = async (
           console.error(error);
           resolve(null);
         }
-      })
+      }))
   );
 };
 
@@ -181,7 +181,7 @@ export const generatePDFVersion2 = async (
   const imageCache = version2ImageCache;
   onProgress?.(5);
 
-  const uniqueImages = new Map<string, string>();
+  const uniqueImages = new Map<string, { source: string; fallback: string }>();
   if (selectedFields.image) {
     products.forEach((row) => {
       const imageSource =
@@ -194,15 +194,21 @@ export const generatePDFVersion2 = async (
       );
       uniqueImages.set(
         getCloudinaryAssetKey(optimizedSource),
-        optimizedSource
+        {
+          source: optimizedSource,
+          fallback: buildCloudinaryDeliveryUrl(
+            cleanValue(row.fallbackImageUrl),
+            CLOUDINARY_PDF_TRANSFORMATION
+          ),
+        }
       );
     });
   }
 
   await preloadWithConcurrency(
     [...uniqueImages.entries()],
-    ([cacheKey, source]) =>
-      loadImage(source, imageCache, cacheKey),
+    ([cacheKey, { source, fallback }]) =>
+      loadImage(source, imageCache, cacheKey, fallback),
     (completed, total) =>
       onProgress?.(imageLoadProgress(completed, total))
   );
@@ -308,8 +314,12 @@ export const generatePDFVersion2 = async (
         CLOUDINARY_PDF_TRANSFORMATION
       );
       const imageCacheKey = getCloudinaryAssetKey(optimizedImageSrc);
+      const fallbackImageSrc = buildCloudinaryDeliveryUrl(
+        cleanValue(row.fallbackImageUrl),
+        CLOUDINARY_PDF_TRANSFORMATION
+      );
       const image = optimizedImageSrc
-        ? await loadImage(optimizedImageSrc, imageCache, imageCacheKey)
+        ? await loadImage(optimizedImageSrc, imageCache, imageCacheKey, fallbackImageSrc)
         : null;
 
       if (image) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { ensureProductIndexes } from "@/lib/databaseIndexes";
+import { withResolvedImageFields } from "@/lib/imageRead";
 
 export async function GET(req: Request) {
   const auth = await requireAuthenticatedUser();
@@ -25,7 +26,7 @@ export async function GET(req: Request) {
       itemNo: itemNo.trim(),
     });
 
-  return Response.json(image);
+  return Response.json(image ? withResolvedImageFields(image) : null);
 }
 export async function POST(request: NextRequest) {
   try {

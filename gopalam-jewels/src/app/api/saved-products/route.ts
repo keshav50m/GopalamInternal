@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 import { requireAuthenticatedUser } from '@/lib/auth';
 import { ensureProductIndexes } from '@/lib/databaseIndexes';
+import { withResolvedImageFields } from '@/lib/imageRead';
 
 
 export async function GET(request: NextRequest) {
@@ -37,9 +38,16 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         product: {
-          ...product,
+          ...withResolvedImageFields(product),
           imageCatalogueImage:
             catalogueItem?.image || "",
+          imageCatalogueR2Image: catalogueItem?.r2Image || "",
+          imageCatalogueResolvedImageUrl: catalogueItem
+            ? withResolvedImageFields(catalogueItem).resolvedImageUrl
+            : "",
+          imageCatalogueFallbackImageUrl: catalogueItem
+            ? withResolvedImageFields(catalogueItem).fallbackImageUrl
+            : "",
         },
       });
     }
@@ -61,15 +69,19 @@ export async function GET(request: NextRequest) {
     const imageByItemNo = new Map(
       imageCatalogueItems.map((item: any) => [
         String(item.itemNo || "").trim(),
-        item.image || "",
+        withResolvedImageFields(item),
       ])
     );
 
     const productsWithCatalogueImages = savedProducts.map((product: any) => {
       const itemNo = String(product.data?.ITEMNO || "").trim();
+      const catalogue = imageByItemNo.get(itemNo);
       return {
-        ...product,
-        imageCatalogueImage: imageByItemNo.get(itemNo) || "",
+        ...withResolvedImageFields(product),
+        imageCatalogueImage: catalogue?.image || "",
+        imageCatalogueR2Image: catalogue?.r2Image || "",
+        imageCatalogueResolvedImageUrl: catalogue?.resolvedImageUrl || "",
+        imageCatalogueFallbackImageUrl: catalogue?.fallbackImageUrl || "",
       };
     });
 

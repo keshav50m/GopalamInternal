@@ -10,6 +10,7 @@ import {
     normalizeItemNo,
     resolveImageCatalogueExcelImage,
 } from "@/utils/resolveImageCatalogueExcelImage";
+import { withResolvedImageFields } from "@/lib/imageRead";
 
 export async function POST(req: NextRequest) {
     try {
@@ -89,15 +90,16 @@ export async function POST(req: NextRequest) {
             const firstProduct = productsByItemNo.get(itemNo)?.[0];
             const displayItemNo = firstProduct?.data?.ITEMNO || itemNo;
 
+            const selected = resolveImageCatalogueExcelImage({
+                itemNo,
+                selectedProduct: firstProduct,
+                catalogueImageMap: imageMap,
+                productsByItemNo,
+            });
             return {
                 barcode: firstProduct?.barcode || "",
                 itemNo: displayItemNo,
-                image: resolveImageCatalogueExcelImage({
-                    itemNo,
-                    selectedProduct: firstProduct,
-                    catalogueImageMap: imageMap,
-                    productsByItemNo,
-                }),
+                ...withResolvedImageFields(selected),
             };
         });
 

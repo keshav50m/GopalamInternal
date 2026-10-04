@@ -11,6 +11,7 @@ import {
   normalizeItemNo,
   resolveImageCatalogueExcelImage,
 } from "@/utils/resolveImageCatalogueExcelImage";
+import { withResolvedImageFields } from "@/lib/imageRead";
 
 type QRUploadRow = {
   barcode: string;
@@ -121,15 +122,16 @@ export async function POST(req: NextRequest) {
       rows: uniqueRows.map((row) => {
         const selectedProduct = productMap.get(normalizeBarcode(row.barcode));
 
+        const selected = resolveImageCatalogueExcelImage({
+          itemNo: row.itemNo,
+          selectedProduct,
+          catalogueImageMap: imageMap,
+          productsByItemNo,
+        });
         return {
           barcode: row.barcode,
           itemNo: row.itemNo,
-          image: resolveImageCatalogueExcelImage({
-            itemNo: row.itemNo,
-            selectedProduct,
-            catalogueImageMap: imageMap,
-            productsByItemNo,
-          }),
+          ...withResolvedImageFields(selected),
         };
       }),
     });

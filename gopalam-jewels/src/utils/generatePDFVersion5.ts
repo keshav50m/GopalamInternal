@@ -4,7 +4,9 @@ import {
   getCloudinaryAssetKey,
 } from "@/utils/cloudinaryDelivery";
 import {
+  fetchImageBlob,
   imageLoadProgress,
+  loadWithImageFallback,
   pdfDrawProgress,
   preloadWithConcurrency,
   type PDFProgressCallback,
@@ -14,6 +16,7 @@ type ProductRow = {
   barcode?: string | number;
   imageUrl?: string;
   previewUrl?: string;
+  fallbackImageUrl?: string;
   data?: Record<string, unknown> | null;
 };
 
@@ -26,6 +29,7 @@ type GroupedProduct = {
   displayItemNo: string;
   quantity: number;
   imageSource: string;
+  fallbackImageSource: string;
 };
 
 type LoadedImage = {
@@ -64,6 +68,7 @@ export const groupRowsForPDFVersion5 = (rows: ProductRow[]) => {
         ? `BARCODE:${normalizedBarcode}`
         : `ROW:${index}`;
     const imageSource = cleanValue(row.imageUrl) || cleanValue(row.previewUrl);
+    const fallbackImageSource = cleanValue(row.fallbackImageUrl);
     const existingGroup = groups.get(identity);
 
     if (!existingGroup) {
@@ -71,6 +76,7 @@ export const groupRowsForPDFVersion5 = (rows: ProductRow[]) => {
         displayItemNo: itemNo || barcode || "-",
         quantity: 1,
         imageSource,
+        fallbackImageSource,
       });
       return;
     }
@@ -78,6 +84,7 @@ export const groupRowsForPDFVersion5 = (rows: ProductRow[]) => {
     existingGroup.quantity += 1;
     if (!existingGroup.imageSource && imageSource) {
       existingGroup.imageSource = imageSource;
+      existingGroup.fallbackImageSource = fallbackImageSource;
     }
   });
 
@@ -104,19 +111,16 @@ const safeFilenamePart = (value: string) =>
 const loadImage = (
   source: string,
   cache: Map<string, Promise<LoadedImage | null>>,
-  cacheKey: string
+  cacheKey: string,
+  fallbackSource = ""
 ) => {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const pendingImage = new Promise<LoadedImage | null>(async (resolve) => {
+  const pendingImage = loadWithImageFallback(source, fallbackSource, (candidate) => new Promise<LoadedImage | null>(async (resolve) => {
     try {
-      const response = await fetch(source);
-      if (!response.ok) {
-        resolve(null);
-        return;
-      }
-      const blob = await response.blob();
+      const blob = await fetchImageBlob(candidate);
+      if (!blob) return resolve(null);
       const objectUrl = URL.createObjectURL(blob);
       const image = new Image();
 
@@ -146,7 +150,7 @@ const loadImage = (
       console.error(error);
       resolve(null);
     }
-  });
+  }));
 
   cache.set(cacheKey, pendingImage);
   return pendingImage;
@@ -185,7 +189,7 @@ export const generatePDFVersion5 = async (
   const displayDate = formatDate(generatedAt);
   const safeCompanyName = cleanValue(companyName) || "Gopalam Gems & Jewellery";
   const imageCache = new Map<string, Promise<LoadedImage | null>>();
-  const uniqueImages = new Map<string, string>();
+  const uniqueImages = new Map<string, { source: string; fallback: string }>();
 
   onProgress?.(5);
   products.forEach((product) => {
@@ -194,12 +198,15 @@ export const generatePDFVersion5 = async (
       product.imageSource,
       CLOUDINARY_PDF_TRANSFORMATION
     );
-    uniqueImages.set(getCloudinaryAssetKey(optimizedSource), optimizedSource);
+    uniqueImages.set(getCloudinaryAssetKey(optimizedSource), {
+      source: optimizedSource,
+      fallback: buildCloudinaryDeliveryUrl(product.fallbackImageSource, CLOUDINARY_PDF_TRANSFORMATION),
+    });
   });
 
   await preloadWithConcurrency(
     [...uniqueImages.entries()],
-    ([cacheKey, source]) => loadImage(source, imageCache, cacheKey),
+    ([cacheKey, { source, fallback }]) => loadImage(source, imageCache, cacheKey, fallback),
     (completed, total) => onProgress?.(imageLoadProgress(completed, total))
   );
   if (uniqueImages.size === 0) onProgress?.(80);
@@ -269,8 +276,12 @@ export const generatePDFVersion5 = async (
         CLOUDINARY_PDF_TRANSFORMATION
       );
       const cacheKey = getCloudinaryAssetKey(optimizedSource);
+      const fallbackSource = buildCloudinaryDeliveryUrl(
+        product.fallbackImageSource,
+        CLOUDINARY_PDF_TRANSFORMATION
+      );
       const image = optimizedSource
-        ? await loadImage(optimizedSource, imageCache, cacheKey)
+        ? await loadImage(optimizedSource, imageCache, cacheKey, fallbackSource)
         : null;
 
       if (image && imageBoxWidth > 0 && imageBoxHeight > 0) {

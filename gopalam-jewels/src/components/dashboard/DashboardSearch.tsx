@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { SavedProduct } from "./types";
-import { formatDisplayDate, getBarcode, getStoneName } from "./dashboardUtils";
+import { formatDisplayDate, getBarcode, getStoneName, hasImage } from "./dashboardUtils";
 import styles from "./Dashboard.module.css";
 
 export default function DashboardSearch() {
@@ -82,7 +82,7 @@ export default function DashboardSearch() {
                   <td>{getBarcode(product)}</td>
                   <td>{product.data?.ITEMNO || "Not available"}</td>
                   <td>{getStoneName(product)}</td>
-                  <td>{product.image ? "Available" : "Missing"}</td>
+                  <td>{hasImage(product) ? "Available" : "Missing"}</td>
                   <td>{formatDisplayDate(product)}</td>
                 </tr>
               ))}

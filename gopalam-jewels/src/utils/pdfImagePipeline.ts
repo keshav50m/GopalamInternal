@@ -1,5 +1,38 @@
 export type PDFProgressCallback = (progress: number) => void;
 
+export const loadWithImageFallback = async <T>(
+  primaryUrl: string,
+  fallbackUrl: string,
+  loader: (url: string) => Promise<T | null>
+) => {
+  const candidates = [primaryUrl, fallbackUrl].filter(
+    (url, index, values) => Boolean(url) && values.indexOf(url) === index
+  );
+
+  for (const candidate of candidates) {
+    try {
+      const loaded = await loader(candidate);
+      if (loaded !== null) return loaded;
+    } catch (error) {
+      console.error("PDF image candidate failed", error);
+    }
+  }
+
+  return null;
+};
+
+export const fetchImageBlob = async (url: string) => {
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+  if (contentType && !contentType.startsWith("image/")) return null;
+  const blob = await response.blob();
+  if (!blob.size || (blob.type && !blob.type.toLowerCase().startsWith("image/"))) {
+    return null;
+  }
+  return blob;
+};
+
 export const preloadWithConcurrency = async <T>(
   items: T[],
   worker: (item: T) => Promise<unknown>,

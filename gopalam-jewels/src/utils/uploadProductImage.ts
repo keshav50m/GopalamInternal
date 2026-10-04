@@ -4,6 +4,8 @@ type UploadImageResponse = {
   cloudinaryUrl?: string | null;
   r2Url?: string | null;
   r2ShadowStatus?: "disabled" | "success" | "failed";
+  resolvedImageUrl?: string;
+  fallbackImageUrl?: string;
   error?: string;
 };
 
@@ -12,6 +14,8 @@ export type UploadedProductImage = {
   cloudinaryUrl: string;
   r2Image?: string;
   r2ShadowStatus: "disabled" | "success" | "failed";
+  resolvedImageUrl: string;
+  fallbackImageUrl: string;
 };
 
 const compressImage = (file: File): Promise<File> =>
@@ -73,5 +77,7 @@ export const uploadProductImage = async (file: File) => {
     cloudinaryUrl: data.cloudinaryUrl || data.imageUrl,
     ...(r2ShadowStatus !== "disabled" ? { r2Image: data.r2Url || "" } : {}),
     r2ShadowStatus,
+    resolvedImageUrl: data.resolvedImageUrl || data.imageUrl,
+    fallbackImageUrl: data.fallbackImageUrl || "",
   } satisfies UploadedProductImage;
 };

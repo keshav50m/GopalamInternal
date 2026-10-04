@@ -12,6 +12,7 @@ import {
   getFileUploadKey,
 } from "@/utils/cloudinaryDelivery";
 import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+import ProviderAwareImage from "@/components/ProviderAwareImage";
 
 type CatalogueUploadRow = {
   id: string;
@@ -19,7 +20,9 @@ type CatalogueUploadRow = {
   barcode: string;
   itemNo: string;
   previewUrl: string;
+  image?: string;
   r2Image?: string;
+  fallbackImageUrl?: string;
 };
 
 type ImageFilter = "all" | "present" | "missing";
@@ -90,7 +93,9 @@ export default function ImageCatalogueUpload() {
 
       if (data?.image) {
         updateRow(id, {
-          previewUrl: data.image,
+          previewUrl: data.resolvedImageUrl || data.image,
+          image: data.image || "",
+          fallbackImageUrl: data.fallbackImageUrl || "",
           ...(Object.prototype.hasOwnProperty.call(data, "r2Image")
             ? { r2Image: String(data.r2Image || "") }
             : {}),
@@ -160,9 +165,23 @@ export default function ImageCatalogueUpload() {
               row.itemNo,
 
             previewUrl:
+              data?.product?.imageCatalogueResolvedImageUrl ||
+              data?.product?.resolvedImageUrl ||
               data?.product?.imageCatalogueImage ||
               data?.product?.image ||
               row.previewUrl,
+            fallbackImageUrl:
+              data?.product?.imageCatalogueFallbackImageUrl ||
+              data?.product?.fallbackImageUrl ||
+              row.fallbackImageUrl || "",
+            r2Image:
+              data?.product?.imageCatalogueR2Image ||
+              data?.product?.r2Image ||
+              row.r2Image,
+            image:
+              data?.product?.imageCatalogueImage ||
+              data?.product?.image ||
+              row.image || "",
           };
         });
 
@@ -228,7 +247,10 @@ export default function ImageCatalogueUpload() {
           file: null,
           barcode: row.barcode || "",
           itemNo: row.itemNo,
-          previewUrl: row.image || "",
+          previewUrl: row.resolvedImageUrl || row.image || "",
+          image: row.image || "",
+          fallbackImageUrl: row.fallbackImageUrl || "",
+          r2Image: row.r2Image || "",
         })
       );
 
@@ -287,7 +309,10 @@ export default function ImageCatalogueUpload() {
           file: null,
           barcode: row.barcode || "",
           itemNo: row.itemNo || "",
-          previewUrl: row.image || "",
+          previewUrl: row.resolvedImageUrl || row.image || "",
+          image: row.image || "",
+          fallbackImageUrl: row.fallbackImageUrl || "",
+          r2Image: row.r2Image || "",
         })
       );
 
@@ -360,6 +385,7 @@ export default function ImageCatalogueUpload() {
 
       for (const row of validRows) {
         let imageUrl = row.previewUrl;
+        let cloudinaryUrl = row.image || row.previewUrl;
         let r2Image = row.r2Image;
 
         if (row.file) {
@@ -376,7 +402,8 @@ export default function ImageCatalogueUpload() {
           }
 
           const uploadedImage = await uploadCache.get(uploadKey)!;
-          imageUrl = uploadedImage.imageUrl;
+          imageUrl = uploadedImage.resolvedImageUrl;
+          cloudinaryUrl = uploadedImage.cloudinaryUrl;
           if (Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")) {
             r2Image = uploadedImage.r2Image || "";
           }
@@ -388,15 +415,17 @@ export default function ImageCatalogueUpload() {
           updateRow(row.id, {
             file: null,
             previewUrl: imageUrl,
+            image: cloudinaryUrl,
             ...(Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")
               ? { r2Image: uploadedImage.r2Image || "" }
               : {}),
+            fallbackImageUrl: uploadedImage.fallbackImageUrl,
           });
         }
 
         itemsToSave.push({
           itemNo: row.itemNo.trim(),
-          image: imageUrl,
+          image: cloudinaryUrl,
           ...(r2Image !== undefined
             ? { r2Image: String(r2Image || "") }
             : {}),
@@ -542,10 +571,14 @@ export default function ImageCatalogueUpload() {
                       />
                     </label>
                     {hasCatalogueImage(row) ? (
-                      <img
+                      <ProviderAwareImage
                         className={styles.thumbnail}
-                        src={buildCloudinaryDeliveryUrl(
+                        primaryUrl={buildCloudinaryDeliveryUrl(
                           row.previewUrl,
+                          CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                        )}
+                        fallbackUrl={buildCloudinaryDeliveryUrl(
+                          row.fallbackImageUrl || "",
                           CLOUDINARY_THUMBNAIL_TRANSFORMATION
                         )}
                         loading="lazy"

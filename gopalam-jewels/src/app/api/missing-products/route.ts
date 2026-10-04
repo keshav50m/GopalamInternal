@@ -65,6 +65,7 @@ export async function GET(req: Request) {
             $and: [
               { $eq: [hasDurableImageExpression("$image"), false] },
               { $eq: [hasDurableImageExpression("$imageUrl"), false] },
+              { $eq: [hasDurableImageExpression("$r2Image"), false] },
             ],
           },
         },
@@ -102,7 +103,12 @@ export async function GET(req: Request) {
                   $filter: {
                     input: "$catalogueItems",
                     as: "catalogueItem",
-                    cond: hasDurableImageExpression("$$catalogueItem.image"),
+                    cond: {
+                      $or: [
+                        hasDurableImageExpression("$$catalogueItem.image"),
+                        hasDurableImageExpression("$$catalogueItem.r2Image"),
+                      ],
+                    },
                   },
                 },
               },

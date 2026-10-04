@@ -9,7 +9,7 @@ import {
   type SearchFiltersState,
   type SearchProduct,
 } from "./types";
-import { resolveProductImage } from "@/utils/resolveProductImage";
+import { resolveProductImageCandidates } from "@/utils/resolveProductImage";
 import {
   readScannerRows,
   writeScannerRows,
@@ -32,13 +32,16 @@ const createEmptyScannerRow = () => ({
 });
 
 const toScannerRow = (product: SearchProduct, products: SearchProduct[]) => {
-  const image = resolveProductImage(product, products);
+  const image = resolveProductImageCandidates(product, products);
 
   return {
     qrCode: "",
     barcode: String(product.barcode || product.data?.BARCODE || "").trim(),
-    imageUrl: image,
-    previewUrl: image,
+    image: image.image,
+    r2Image: image.r2Image,
+    imageUrl: image.primaryUrl,
+    previewUrl: image.primaryUrl,
+    fallbackImageUrl: image.fallbackUrl,
     data: product.data || null,
   };
 };

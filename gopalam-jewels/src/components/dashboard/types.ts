@@ -14,6 +14,9 @@ export type SavedProduct = {
   _id?: string;
   barcode?: string | number;
   image?: string;
+  r2Image?: string;
+  resolvedImageUrl?: string;
+  fallbackImageUrl?: string;
   data?: ProductData;
   updatedAt?: string;
 };

@@ -3,6 +3,7 @@ import type { Document, Filter } from "mongodb";
 import clientPromise from "@/lib/mongodb";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { ensureProductIndexes } from "@/lib/databaseIndexes";
+import { withResolvedImageFields } from "@/lib/imageRead";
 
 const textFieldMap = {
   barcode: "barcode",
@@ -141,16 +142,20 @@ export async function GET(request: NextRequest) {
     const catalogueImages = new Map(
       catalogueItems.map((item) => [
         String(item.itemNo || "").trim(),
-        String(item.image || "").trim(),
+        withResolvedImageFields(item),
       ])
     );
 
     const productsWithImages = products.map((product) => {
       const itemNo = String(product.data?.ITEMNO || "").trim();
 
+      const catalogue = catalogueImages.get(itemNo);
       return {
-        ...product,
-        imageCatalogueImage: catalogueImages.get(itemNo) || "",
+        ...withResolvedImageFields(product),
+        imageCatalogueImage: catalogue?.image || "",
+        imageCatalogueR2Image: catalogue?.r2Image || "",
+        imageCatalogueResolvedImageUrl: catalogue?.resolvedImageUrl || "",
+        imageCatalogueFallbackImageUrl: catalogue?.fallbackImageUrl || "",
       };
     });
 

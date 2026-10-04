@@ -3,6 +3,7 @@ import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
 type ProductLike = {
   barcode?: string | number;
   image?: string;
+  r2Image?: string;
   data?: {
     ITEMNO?: string | number;
   } | null;
@@ -11,7 +12,10 @@ type ProductLike = {
 type CatalogueImageLike = {
   itemNo?: string | number;
   image?: string;
+  r2Image?: string;
 };
+
+type StoredImagePair = { image: string; r2Image: string };
 
 export const normalizeBarcode = (value: unknown) =>
   String(value || "").trim();
@@ -38,9 +42,19 @@ export const buildCatalogueImageMap = (catalogueImages: CatalogueImageLike[]) =>
   new Map(
     catalogueImages.map((item) => [
       normalizeItemNo(item.itemNo),
-      normalizeStoredImageUrl(item.image),
+      {
+        image: normalizeStoredImageUrl(item.image),
+        r2Image: normalizeStoredImageUrl(item.r2Image),
+      },
     ])
   );
+
+const getStoredImagePair = (product?: ProductLike): StoredImagePair => ({
+  image: normalizeStoredImageUrl(product?.image),
+  r2Image: normalizeStoredImageUrl(product?.r2Image),
+});
+
+const hasStoredImagePair = (pair: StoredImagePair) => Boolean(pair.image || pair.r2Image);
 
 export const resolveImageCatalogueExcelImage = ({
   itemNo,
@@ -50,22 +64,22 @@ export const resolveImageCatalogueExcelImage = ({
 }: {
   itemNo: unknown;
   selectedProduct?: ProductLike;
-  catalogueImageMap: Map<string, string>;
+  catalogueImageMap: Map<string, StoredImagePair>;
   productsByItemNo: Map<string, ProductLike[]>;
 }) => {
   const normalizedItemNo = normalizeItemNo(itemNo);
-  if (!normalizedItemNo) return "";
+  if (!normalizedItemNo) return { image: "", r2Image: "" };
 
   const catalogueImage = catalogueImageMap.get(normalizedItemNo);
-  if (catalogueImage) return catalogueImage;
+  if (catalogueImage && hasStoredImagePair(catalogueImage)) return catalogueImage;
 
-  const selectedProductImage = normalizeStoredImageUrl(selectedProduct?.image);
-  if (selectedProductImage) return selectedProductImage;
+  const selectedProductImage = getStoredImagePair(selectedProduct);
+  if (hasStoredImagePair(selectedProductImage)) return selectedProductImage;
 
   return (
     productsByItemNo
       .get(normalizedItemNo)
-      ?.map((product) => normalizeStoredImageUrl(product.image))
-      .find(Boolean) || ""
+      ?.map(getStoredImagePair)
+      .find(hasStoredImagePair) || { image: "", r2Image: "" }
   );
 };

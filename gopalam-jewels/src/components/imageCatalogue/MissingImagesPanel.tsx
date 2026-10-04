@@ -11,6 +11,7 @@ import {
   CLOUDINARY_THUMBNAIL_TRANSFORMATION,
   getFileUploadKey,
 } from "@/utils/cloudinaryDelivery";
+import ProviderAwareImage from "@/components/ProviderAwareImage";
 
 type MissingProduct = {
   _id: string;
@@ -18,6 +19,7 @@ type MissingProduct = {
   itemNo: string;
   file: File | null;
   previewUrl: string;
+  fallbackImageUrl?: string;
   uploadedUrl?: string;
   uploadedR2Url?: string;
 };
@@ -118,7 +120,7 @@ export default function MissingImagesPanel() {
       }
 
       const uploadedImage = await uploadCache.get(uploadKey)!;
-      image = uploadedImage.imageUrl;
+      image = uploadedImage.cloudinaryUrl;
       if (Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")) {
         r2Image = uploadedImage.r2Image || "";
       }
@@ -133,7 +135,8 @@ export default function MissingImagesPanel() {
             ? {
                 ...currentProduct,
                 file: null,
-                previewUrl: image,
+                previewUrl: uploadedImage.resolvedImageUrl,
+                fallbackImageUrl: uploadedImage.fallbackImageUrl,
                 uploadedUrl: image,
                 ...(r2Image !== undefined ? { uploadedR2Url: r2Image } : {}),
               }
@@ -367,10 +370,14 @@ export default function MissingImagesPanel() {
                           />
                         </label>
                         {product.previewUrl ? (
-                          <img
+                          <ProviderAwareImage
                             className={styles.thumbnail}
-                            src={buildCloudinaryDeliveryUrl(
+                            primaryUrl={buildCloudinaryDeliveryUrl(
                               product.previewUrl,
+                              CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                            )}
+                            fallbackUrl={buildCloudinaryDeliveryUrl(
+                              product.fallbackImageUrl || "",
                               CLOUDINARY_THUMBNAIL_TRANSFORMATION
                             )}
                             loading="lazy"
