@@ -57,6 +57,7 @@ test("new Gold product sets sold false only on insert", () => {
   assert.equal(Object.prototype.hasOwnProperty.call(update.$set, "sold"), false);
   assert.equal(update.$set.image, "https://res.cloudinary.com/example/gold.jpg");
   assert.equal(update.$set.r2Image, "https://images.example.com/gold.jpg");
+  assert.deepEqual(update.$unset, { imageRemoved: "" });
 });
 
 test("empty image values do not overwrite persistent saved images", () => {
@@ -75,4 +76,5 @@ test("empty image values do not overwrite persistent saved images", () => {
   assert.equal(Object.prototype.hasOwnProperty.call(productUpdate.$set, "r2Image"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(catalogueUpdate.$set, "image"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(catalogueUpdate.$set, "r2Image"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(productUpdate, "$unset"), false);
 });

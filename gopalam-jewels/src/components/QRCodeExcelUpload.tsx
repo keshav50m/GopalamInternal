@@ -6,6 +6,8 @@ import QRUpdateReview, { type QRUpdateConflict } from "@/components/QRUpdateRevi
 import { resolveProductImageCandidates } from "@/utils/resolveProductImage";
 import { normalizeBarcode } from "@/utils/normalizeBarcode";
 import { getChangedQRFields, parseQRCode } from "@/utils/qrProductData";
+import PasteImport from "@/components/PasteImport";
+import { getPastedLines } from "@/utils/pasteImport";
 
 type Props = { setRows: React.Dispatch<React.SetStateAction<any[]>> };
 
@@ -16,25 +18,18 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
   const [conflicts, setConflicts] = useState<QRUpdateConflict[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const workbook = XLSX.read(await file.arrayBuffer());
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(sheet);
+  const importQRCodes = async (qrCodes: string[]) => {
     const uniqueByBarcode = new Map<string, { qrString: string; parsed: ReturnType<typeof parseQRCode>; barcode: string }>();
 
-    json.forEach((row: any) => {
-      const qrString = String(row.qrCode || "").trim();
+    qrCodes.forEach((value) => {
+      const qrString = String(value || "").trim();
       const parsed = parseQRCode(qrString);
       const barcode = normalizeBarcode(parsed.BARCODE);
       if (barcode) uniqueByBarcode.set(barcode, { qrString, parsed: { ...parsed, BARCODE: barcode }, barcode });
     });
     const parsedRows = [...uniqueByBarcode.values()];
     if (parsedRows.length === 0) {
-      alert("No valid QR rows were found in this Excel file.");
-      event.target.value = "";
+      alert("No valid QR rows were found.");
       return;
     }
 
@@ -118,6 +113,20 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
         return updatedRow;
       }));
       alert("QR rows were added, but saved product images could not be loaded. Please try again.");
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer());
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      await importQRCodes(json.map((row) => String(row.qrCode || "")));
+    } catch (error) {
+      console.error("Unable to read QR Excel:", error);
+      alert("Unable to read this QR Excel file.");
     } finally {
       event.target.value = "";
     }
@@ -151,6 +160,7 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
 
   return <div>
     <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} style={{ border: "1px solid #ccc", padding: "6px", borderRadius: "6px", background: "white", cursor: "pointer" }} />
+    <PasteImport label="Paste QR codes" placeholder={"One complete QR value per line\n100234,ITEM-01,DIAMOND,4.50,0.75,0.20,25000,12,300"} onImport={(text) => importQRCodes(getPastedLines(text, ["qrCode", "QR_CODE"]))} />
     {conflicts.length > 0 && <button type="button" onClick={() => setReviewOpen(true)} style={{ display: "block", marginTop: "8px", border: 0, borderRadius: "6px", padding: "8px 12px", background: "#c9a84c", color: "white", fontWeight: 700, cursor: "pointer" }}>Review Updates ({conflicts.length})</button>}
     <QRUpdateReview conflicts={conflicts} open={reviewOpen && conflicts.length > 0} onClose={() => setReviewOpen(false)} onChange={changeConflict} onResolved={resolveConflicts} />
   </div>;

@@ -13,6 +13,9 @@ import {
 } from "@/utils/cloudinaryDelivery";
 import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
 import ProviderAwareImage from "@/components/ProviderAwareImage";
+import PasteImport from "@/components/PasteImport";
+import { getPastedLines } from "@/utils/pasteImport";
+import * as XLSX from "xlsx";
 
 type CatalogueUploadRow = {
   id: string;
@@ -211,13 +214,7 @@ export default function ImageCatalogueUpload() {
     updateRow(id, { file, previewUrl });
   };
 
-  const handleExcelUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = e.target.files?.[0];
-
-    if (!file) return;
-
+  const importCatalogueExcel = async (file: File, mode: "barcode" | "qr") => {
     try {
       setError("");
       setMessage("");
@@ -226,7 +223,7 @@ export default function ImageCatalogueUpload() {
       formData.append("file", file);
 
       const response = await fetch(
-        "/api/image-catalogue/excel",
+        mode === "qr" ? "/api/image-catalogue/qr-excel" : "/api/image-catalogue/excel",
         {
           method: "POST",
           body: formData,
@@ -237,7 +234,7 @@ export default function ImageCatalogueUpload() {
 
       if (!response.ok) {
         throw new Error(
-          data.error || "Excel upload failed"
+          data.error || `${mode === "qr" ? "QR " : ""}Excel upload failed`
         );
       }
 
@@ -262,15 +259,22 @@ export default function ImageCatalogueUpload() {
       setImageFilter("all");
 
       setMessage(
-        `${newRows.length} unique Item Nos loaded`
+        `${newRows.length} unique Item Nos loaded${mode === "qr" ? " from QR data" : ""}`
       );
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Excel upload failed"
+          : `${mode === "qr" ? "QR " : ""}Excel upload failed`
       );
     }
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await importCatalogueExcel(file, "barcode");
+    e.target.value = "";
   };
 
   const handleQRExcelUpload = async (
@@ -280,61 +284,22 @@ export default function ImageCatalogueUpload() {
 
     if (!file) return;
 
-    try {
-      setError("");
-      setMessage("");
+    await importCatalogueExcel(file, "qr");
+    e.target.value = "";
+  };
 
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(
-        "/api/image-catalogue/qr-excel",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "QR Excel upload failed"
-        );
-      }
-
-      const newRows = data.rows.map(
-        (row: any) => ({
-          id: `${Date.now()}-${Math.random()}`,
-          file: null,
-          barcode: row.barcode || "",
-          itemNo: row.itemNo || "",
-          previewUrl: row.resolvedImageUrl || row.image || "",
-          image: row.image || "",
-          fallbackImageUrl: row.fallbackImageUrl || "",
-          r2Image: row.r2Image || "",
-        })
-      );
-
-      setRows(
-        newRows.length
-          ? [...newRows, createEmptyRow()]
-          : [createEmptyRow()]
-      );
-      setImageFilter("all");
-
-      setMessage(
-        `${newRows.length} unique Item Nos loaded from QR Excel`
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "QR Excel upload failed"
-      );
-    } finally {
-      e.target.value = "";
+  const importPastedCatalogueValues = async (text: string, mode: "barcode" | "qr") => {
+    const values = getPastedLines(text, mode === "qr" ? ["qrCode", "QR_CODE"] : ["BARCODE"]);
+    if (values.length === 0) {
+      setError("No valid values were pasted.");
+      return;
     }
+    const header = mode === "qr" ? "qrCode" : "BARCODE";
+    const sheet = XLSX.utils.aoa_to_sheet([[header], ...values.map((value) => [value])]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+    const bytes = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    await importCatalogueExcel(new File([bytes], `pasted-${mode}.xlsx`, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), mode);
   };
 
   const handleAddRow = () => {
@@ -513,6 +478,7 @@ export default function ImageCatalogueUpload() {
             onChange={handleExcelUpload}
             disabled={isUploading}
           />
+          <PasteImport label="Paste barcodes" placeholder="One barcode per line" disabled={isUploading} onImport={(text) => importPastedCatalogueValues(text, "barcode")} />
         </div>
 
         <div
@@ -538,6 +504,7 @@ export default function ImageCatalogueUpload() {
             onChange={handleQRExcelUpload}
             disabled={isUploading}
           />
+          <PasteImport label="Paste QR codes" placeholder="One complete QR value per line" disabled={isUploading} onImport={(text) => importPastedCatalogueValues(text, "qr")} />
         </div>
       </div>
       <div className={styles.tableWrap}>

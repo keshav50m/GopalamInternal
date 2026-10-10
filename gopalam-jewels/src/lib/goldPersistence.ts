@@ -18,8 +18,10 @@ export const buildGoldProductUpdate = (
   if (item.image) fieldsToSet.image = item.image;
   if (item.hasR2Image && item.r2Image) fieldsToSet.r2Image = item.r2Image;
 
+  const hasReplacementImage = Boolean(item.image || item.r2Image);
   return {
     $set: fieldsToSet,
+    ...(hasReplacementImage ? { $unset: { imageRemoved: "" } } : {}),
     $setOnInsert: { sold: false, createdAt: updatedAt },
   };
 };
@@ -37,4 +39,3 @@ export const buildGoldCatalogueUpdate = (
   if (item.r2Image) fieldsToSet.r2Image = item.r2Image;
   return { $set: fieldsToSet };
 };
-

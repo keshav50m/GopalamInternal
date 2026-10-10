@@ -1,4 +1,5 @@
 import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+import { getRemovedImageCandidates } from "@/utils/productImageRemoval";
 
 type ProductLike = {
   barcode?: string | number;
@@ -12,6 +13,7 @@ type ProductLike = {
   imageCatalogueR2Image?: string;
   imageCatalogueResolvedImageUrl?: string;
   imageCatalogueFallbackImageUrl?: string;
+  imageRemoved?: boolean;
   data?: {
     BARCODE?: string | number;
     ITEMNO?: string | number;
@@ -104,6 +106,11 @@ export const resolveProductImageCandidates = (
   products: ProductLike[]
 ) => {
   if (!product) return { primaryUrl: "", fallbackUrl: "", image: "", r2Image: "" };
+
+  // A user explicitly removed this barcode's image. Do not resurrect a shared
+  // Item No image through the normal fallback chain.
+  const removedImageCandidates = getRemovedImageCandidates(product.imageRemoved);
+  if (removedImageCandidates) return removedImageCandidates;
 
   const barcode = getBarcode(product);
   const itemNo = getItemNo(product);

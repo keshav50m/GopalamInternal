@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       const matchedProducts = await db
         .collection("savedProducts")
         .find({ barcode: { $in: barcodeBatch } })
-        .project({ barcode: 1, image: 1, r2Image: 1, data: 1, updatedAt: 1 })
+        .project({ barcode: 1, image: 1, r2Image: 1, imageRemoved: 1, data: 1, updatedAt: 1 })
         .toArray();
 
       products.push(...matchedProducts);
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
           db
             .collection("savedProducts")
             .find({ "data.ITEMNO": { $in: itemNos } })
-            .project({ barcode: 1, image: 1, r2Image: 1, data: 1 })
+            .project({ barcode: 1, image: 1, r2Image: 1, imageRemoved: 1, data: 1 })
             .toArray(),
         ])
       : [[], []];

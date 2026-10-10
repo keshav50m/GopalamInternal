@@ -91,3 +91,43 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const auth = await requireAuthenticatedUser();
+    if (auth.response) return auth.response;
+    await ensureGoldProductIndexes();
+
+    const body = await request.json();
+    const barcode = normalizeBarcode(body?.barcode);
+    if (!barcode) {
+      return NextResponse.json({ error: "Barcode is required" }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const result = await client.db("gopalamJewels").collection("savedProducts_Gold").updateOne(
+      {
+        $or: [
+          { barcode },
+          { "data.BARCODE": barcode },
+          ...(/^(0|[1-9]\d*)$/.test(barcode)
+            ? [{ barcode: Number(barcode) }, { "data.BARCODE": Number(barcode) }]
+            : []),
+        ],
+      },
+      {
+        $unset: { image: "", r2Image: "" },
+        $set: { imageRemoved: true, updatedAt: new Date() },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Gold product not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Gold image removal failed:", error);
+    return NextResponse.json({ error: "Failed to remove Gold product image" }, { status: 500 });
+  }
+}

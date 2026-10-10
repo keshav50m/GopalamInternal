@@ -117,10 +117,16 @@ export async function POST(request: NextRequest) {
       if (Object.prototype.hasOwnProperty.call(item, "r2Image")) {
         fieldsToSet.r2Image = String(item.r2Image || "").trim();
       }
+      const hasReplacementImage = Boolean(
+        String(item.image || "").trim() || String(item.r2Image || "").trim()
+      );
       return {
         updateOne: {
           filter: { barcode: String(item.barcode).trim() },
-          update: { $set: fieldsToSet },
+          update: {
+            $set: fieldsToSet,
+            ...(hasReplacementImage ? { $unset: { imageRemoved: "" } } : {}),
+          },
           upsert: true,
         },
       };
@@ -167,5 +173,37 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("POST Error:", error);
     return NextResponse.json({ error: "Failed to save products" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const auth = await requireAuthenticatedUser();
+    if (auth.response) return auth.response;
+    await ensureProductIndexes();
+
+    const body = await request.json();
+    const barcode = String(body?.barcode || "").trim();
+    if (!barcode) {
+      return NextResponse.json({ error: "Barcode is required" }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const result = await client.db("gopalamJewels").collection("savedProducts").updateOne(
+      { barcode },
+      {
+        $unset: { image: "", r2Image: "" },
+        $set: { imageRemoved: true, updatedAt: new Date() },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Image removal failed:", error);
+    return NextResponse.json({ error: "Failed to remove product image" }, { status: 500 });
   }
 }

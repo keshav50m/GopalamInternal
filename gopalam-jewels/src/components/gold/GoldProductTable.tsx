@@ -15,6 +15,7 @@ type Props = {
   onBarcodeChange: (index: number, value: string) => void;
   onBarcodeLookup: (index: number, value: string) => void;
   onImage: (index: number, file: File) => void;
+  onRemoveImage: (index: number) => void;
   onRemove: (index: number) => void;
   onPreview: (primaryUrl: string, fallbackUrl: string) => void;
   totals: GoldTotals;
@@ -86,18 +87,28 @@ export default function GoldProductTable(props: Props) {
                 <label className={styles.fileLabel} htmlFor={`gold-file-${row.id}`}>Choose File</label>
                 {row.previewUrl || row.imageUrl ? (
                   <ProviderAwareImage
-                    className={styles.thumbnail}
-                    alt={`Gold product ${row.barcode || row.data?.["LOT NO"] || "image"}`}
-                    primaryUrl={row.previewUrl || row.imageUrl}
-                    fallbackUrl={row.fallbackImageUrl}
-                    loading="lazy"
-                    decoding="async"
-                    onClick={() => props.onPreview(
-                      row.previewUrl || row.imageUrl,
-                      row.fallbackImageUrl
-                    )}
-                  />
+                      className={styles.thumbnail}
+                      alt={`Gold product ${row.barcode || row.data?.["LOT NO"] || "image"}`}
+                      primaryUrl={row.previewUrl || row.imageUrl}
+                      fallbackUrl={row.fallbackImageUrl}
+                      loading="lazy"
+                      decoding="async"
+                      onClick={() => props.onPreview(
+                        row.previewUrl || row.imageUrl,
+                        row.fallbackImageUrl
+                      )}
+                    />
                 ) : <div className={styles.emptyImage}>No file selected</div>}
+                {row.previewUrl || row.imageUrl ? (
+                  <button
+                    type="button"
+                    className={styles.removeImageButton}
+                    disabled={!row.barcode || row.removingImage}
+                    onClick={() => props.onRemoveImage(index)}
+                  >
+                    {row.removingImage ? "Removing…" : "Remove Image"}
+                  </button>
+                ) : null}
               </td>
               <td>
                 <input

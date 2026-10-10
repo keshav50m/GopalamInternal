@@ -34,6 +34,8 @@ export type GoldScannerRow = {
   imageUrl: string;
   previewUrl: string;
   fallbackImageUrl: string;
+  imageRemoved: boolean;
+  removingImage: boolean;
 };
 
 type GoldLookupProduct = {
@@ -47,6 +49,7 @@ type GoldLookupProduct = {
   catalogueResolvedImageUrl?: string;
   catalogueFallbackImageUrl?: string;
   data?: GoldProductData;
+  imageRemoved?: boolean;
 };
 
 type LotImage = {
@@ -66,12 +69,20 @@ const createEmptyRow = (): GoldScannerRow => ({
   imageUrl: "",
   previewUrl: "",
   fallbackImageUrl: "",
+  imageRemoved: false,
+  removingImage: false,
 });
 
 const cleanStoredRow = (row: GoldScannerRow) => ({
   ...row,
   previewUrl: row.previewUrl.startsWith("blob:") ? row.imageUrl : row.previewUrl,
 });
+
+const hasPersistentImage = (row: GoldScannerRow) => Boolean(
+  normalizeStoredImageUrl(row.imageUrl) ||
+  normalizeStoredImageUrl(row.image) ||
+  normalizeStoredImageUrl(row.r2Image)
+);
 
 const asNumber = (value: unknown) => {
   const number = Number(value || 0);
@@ -82,6 +93,9 @@ const getImageFields = (
   product: GoldLookupProduct | undefined,
   lotImage?: LotImage
 ) => {
+  if (product?.imageRemoved) {
+    return { image: "", r2Image: "", imageUrl: "", fallbackImageUrl: "" };
+  }
   const useProductImage = Boolean(product?.resolvedImageUrl || product?.image || product?.r2Image);
   return {
     image: normalizeStoredImageUrl(
@@ -404,6 +418,7 @@ export default function GoldProductLookup() {
                 imageUrl: uploaded.resolvedImageUrl,
                 previewUrl: uploaded.resolvedImageUrl,
                 fallbackImageUrl: uploaded.fallbackImageUrl,
+                imageRemoved: false,
               }
             : item
         ));
@@ -418,15 +433,58 @@ export default function GoldProductLookup() {
     task.finally(() => uploadTasksRef.current.delete(task));
   };
 
+  const handleRemoveImage = async (index: number) => {
+    const row = latestRowsRef.current[index];
+    const barcode = normalizeBarcode(row?.barcode);
+    if (!row || !barcode || !hasPersistentImage(row)) return;
+    if (!window.confirm(`Remove the saved image for Gold barcode ${barcode}?`)) return;
+
+    if (uploadTasksRef.current.size > 0) {
+      await Promise.allSettled([...uploadTasksRef.current]);
+    }
+
+    setRows((current) => current.map((item) =>
+      item.id === row.id ? { ...item, removingImage: true } : item
+    ));
+
+    try {
+      const response = await fetch("/api/gold/saved-products", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ barcode }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Gold image removal failed");
+
+      setSelectedImage(null);
+      setRows((current) => {
+        const nextRows = current.map((item) => item.id === row.id
+          ? {
+              ...item,
+              image: "",
+              r2Image: "",
+              imageUrl: "",
+              previewUrl: "",
+              fallbackImageUrl: "",
+              imageRemoved: true,
+              removingImage: false,
+            }
+          : item
+        );
+        latestRowsRef.current = nextRows;
+        return nextRows;
+      });
+    } catch (removeError) {
+      setRows((current) => current.map((item) =>
+        item.id === row.id ? { ...item, removingImage: false } : item
+      ));
+      setError(removeError instanceof Error ? removeError.message : "Gold image removal failed");
+    }
+  };
+
   const validRows = useMemo(
     () => rows.filter((row) => Boolean(normalizeBarcode(row.barcode) && row.data)),
     [rows]
-  );
-
-  const hasPersistentImage = (row: GoldScannerRow) => Boolean(
-    normalizeStoredImageUrl(row.imageUrl) ||
-    normalizeStoredImageUrl(row.image) ||
-    normalizeStoredImageUrl(row.r2Image)
   );
 
   const rowsWithImages = useMemo(
@@ -437,6 +495,11 @@ export default function GoldProductLookup() {
     () => validRows.filter((row) => !hasPersistentImage(row)),
     [validRows]
   );
+  const rowsForExcel = useMemo(() => {
+    if (imageFilter === "present") return rowsWithImages;
+    if (imageFilter === "missing") return rowsWithoutImages;
+    return validRows;
+  }, [imageFilter, rowsWithImages, rowsWithoutImages, validRows]);
   const filteredRows = useMemo(() => {
     if (imageFilter === "present") {
       return rows.filter((row) => !row.data || hasPersistentImage(row));
@@ -515,9 +578,9 @@ export default function GoldProductLookup() {
     }
   };
 
-  const downloadMissingExcel = async (mode: "barcode" | "qr") => {
+  const downloadExcel = async (mode: "barcode" | "qr") => {
     const { utils, writeFile } = await import("xlsx");
-    const values = rowsWithoutImages.map((row) => mode === "barcode"
+    const values = rowsForExcel.map((row) => mode === "barcode"
       ? normalizeBarcode(row.barcode)
       : row.qrCode || [
           row.data?.BARCODE,
@@ -539,7 +602,12 @@ export default function GoldProductLookup() {
       utils.aoa_to_sheet([[header], ...values.map((value) => [value])]),
       "Sheet1"
     );
-    writeFile(workbook, `gold-products-missing-images-${mode === "barcode" ? "barcodes" : "qr-codes"}.xlsx`, { compression: true });
+    const filterName = imageFilter === "all"
+      ? "all-products"
+      : imageFilter === "present"
+        ? "products-with-images"
+        : "products-missing-images";
+    writeFile(workbook, `gold-${filterName}-${mode === "barcode" ? "barcodes" : "qr-codes"}.xlsx`, { compression: true });
   };
 
   const removeAllProducts = () => {
@@ -553,6 +621,14 @@ export default function GoldProductLookup() {
 
   return (
     <section className={styles.shell}>
+      <div className={styles.modeBanner} aria-label="Gold Jewellery workspace">
+        <div className={styles.modeIcon} aria-hidden="true">◆</div>
+        <div>
+          <span className={styles.modeEyebrow}>GOLD JEWELLERY</span>
+          <strong>Gold Inventory Workspace</strong>
+          <small>Lot No • Karat • Net Weight • Gold-specific pricing</small>
+        </div>
+      </div>
       <div className={styles.toolbar}>
         <div>
           <h2>Gold Jewellery Scanner</h2>
@@ -587,14 +663,9 @@ export default function GoldProductLookup() {
             )}
           />
         </label>
+        <button className={styles.actionButton} disabled={rowsForExcel.length === 0} onClick={() => void downloadExcel("barcode")}>Download Barcode Excel</button>
+        <button className={styles.actionButton} disabled={rowsForExcel.length === 0} onClick={() => void downloadExcel("qr")}>Download QR Excel</button>
       </div>
-
-      {imageFilter === "missing" ? (
-        <div className={styles.secondaryActions}>
-          <button className={styles.actionButton} disabled={rowsWithoutImages.length === 0} onClick={() => void downloadMissingExcel("barcode")}>Download Barcode Excel</button>
-          <button className={styles.actionButton} disabled={rowsWithoutImages.length === 0} onClick={() => void downloadMissingExcel("qr")}>Download QR Excel</button>
-        </div>
-      ) : null}
 
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       <GoldProductTable
@@ -605,6 +676,7 @@ export default function GoldProductLookup() {
         onBarcodeChange={(index, value) => handleBarcodeChange(originalIndex(index), value)}
         onBarcodeLookup={(index, value) => handleBarcodeLookup(originalIndex(index), value)}
         onImage={(index, file) => handleImage(originalIndex(index), file)}
+        onRemoveImage={(index) => void handleRemoveImage(originalIndex(index))}
         onRemove={(index) => setRows((current) => {
           const indexToRemove = originalIndex(index);
           const next = current.filter((_, currentIndex) => currentIndex !== indexToRemove);

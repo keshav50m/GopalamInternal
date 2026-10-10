@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import * as XLSX from "xlsx";
+import PasteImport from "@/components/PasteImport";
+import { parsePastedTable } from "@/utils/pasteImport";
 
 export default function AdminPanel({ setProducts, products }: any) {
   const [preview, setPreview] = useState<any[]>(products || []);
@@ -15,6 +17,16 @@ export default function AdminPanel({ setProducts, products }: any) {
     setPreview(json);
   };
 
+  const handlePaste = (text: string) => {
+    const rows = parsePastedTable(text);
+    if (rows.length === 0) {
+      alert("Paste a table with a header row and at least one product row.");
+      return;
+    }
+    setProducts(rows);
+    setPreview(rows);
+  };
+
   return (
     <div>
       <h2>Upload Excel</h2>
@@ -26,6 +38,7 @@ export default function AdminPanel({ setProducts, products }: any) {
           if (e.target.files?.[0]) handleFile(e.target.files[0]);
         }}
       />
+      <PasteImport label="Paste Excel data" placeholder={"Copy a complete Excel table including its header row, then paste it here."} onImport={handlePaste} />
 
       <h3 style={{ marginTop: 20 }}>Preview</h3>
 

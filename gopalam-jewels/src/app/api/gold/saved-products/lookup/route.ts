@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
             { "data.BARCODE": { $in: compatibleBarcodes } },
           ],
         })
-        .project({ barcode: 1, image: 1, r2Image: 1, data: 1, sold: 1, updatedAt: 1 })
+        .project({ barcode: 1, image: 1, r2Image: 1, imageRemoved: 1, data: 1, sold: 1, updatedAt: 1 })
         .toArray());
     }
 

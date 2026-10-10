@@ -7,6 +7,7 @@ import {
   resolveImageCandidates,
 } from "../src/utils/imageProvider.ts";
 import { loadWithImageFallback } from "../src/utils/pdfImagePipeline.ts";
+import { getRemovedImageCandidates } from "../src/utils/productImageRemoval.ts";
 
 const cloudinary = "https://res.cloudinary.com/demo/image/upload/v1/item.jpg";
 const r2 = "https://images.example.com/products/item.jpg";
@@ -43,6 +44,16 @@ test("empty, null, undefined, and blob values are not persistent candidates", ()
   });
 });
 
+test("an explicitly removed barcode does not inherit an Item No image", () => {
+  assert.deepEqual(getRemovedImageCandidates(true), {
+    primaryUrl: "",
+    fallbackUrl: "",
+    image: "",
+    r2Image: "",
+  });
+  assert.equal(getRemovedImageCandidates(false), null);
+});
+
 test("PDF acquisition tries primary once and fallback once", async () => {
   const attempts: string[] = [];
   const result = await loadWithImageFallback(r2, cloudinary, async (url) => {
@@ -62,4 +73,3 @@ test("PDF acquisition does not loop when both candidates fail", async () => {
   assert.equal(result, null);
   assert.deepEqual(attempts, [r2, cloudinary]);
 });
-

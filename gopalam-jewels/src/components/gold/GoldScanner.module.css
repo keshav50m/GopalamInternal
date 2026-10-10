@@ -1,6 +1,61 @@
 .shell {
   width: 100%;
   overflow-x: auto;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid #eadfca;
+  border-top: 3px solid #d4b15a;
+  border-radius: 10px;
+  background: #fffefd;
+}
+
+.modeBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 10px 14px;
+  border: 1px solid #ead9b2;
+  border-radius: 8px;
+  color: #55472c;
+  background: #fbf5e8;
+}
+
+.modeIcon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid #d8be7c;
+  border-radius: 50%;
+  color: #a57d29;
+  background: #fffdf8;
+  font-size: 15px;
+}
+
+.modeBanner strong,
+.modeBanner small {
+  display: block;
+}
+
+.modeBanner strong {
+  margin-top: 1px;
+  font-size: 16px;
+}
+
+.modeBanner small {
+  margin-top: 2px;
+  color: #7c705b;
+  font-size: 12px;
+}
+
+.modeEyebrow {
+  display: block;
+  color: #9b792d;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
 }
 
 .toolbar,
@@ -15,6 +70,7 @@
 
 .toolbar {
   margin-bottom: 18px;
+  padding: 0 4px;
 }
 
 .discounts {
@@ -77,6 +133,21 @@
   table-layout: fixed;
 }
 
+.table th {
+  border-color: #c9ad68;
+  background: #bda05c;
+}
+
+.table tbody tr:nth-child(even) {
+  background: #fdfaf3;
+}
+
+.table tfoot td {
+  border-top: 2px solid #d8c18b;
+  background: #fbf7ed;
+  font-weight: 700;
+}
+
 .table input[type="text"] {
   box-sizing: border-box;
   padding: 7px;
@@ -93,12 +164,19 @@
 }
 
 .fileLabel {
-  display: inline-block;
-  padding: 3px 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 78px;
+  height: 22px;
+  padding: 2px 6px;
   font-size: 11px;
+  text-align: center;
   background: #eee;
   border-radius: 4px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .thumbnail {
@@ -132,18 +210,37 @@
 }
 
 .removeButton { background: #ef4444; padding: 6px 12px; }
+.removeImageButton {
+  box-sizing: border-box;
+  display: block;
+  width: 78px;
+  height: 22px;
+  margin-top: 6px;
+  padding: 2px 3px;
+  border: 0;
+  border-radius: 4px;
+  background: #dc2626;
+  color: white;
+  font-size: 9px;
+  line-height: normal;
+  white-space: nowrap;
+  font-weight: 700;
+  cursor: pointer;
+}
+.removeImageButton:disabled { opacity: 0.65; cursor: wait; }
 .addButton { background: #3b82f6; }
 .saveButton { background: #28a745; }
 .actionButton { background: #3b82f6; }
+.actionButton:disabled { opacity: 0.6; cursor: not-allowed; }
 .dangerButton { background: #dc2626; }
 .saveButton:disabled { opacity: 0.6; cursor: wait; }
 
 .summary {
   margin-top: 20px;
   padding: 12px;
-  border: 1px solid #ccc;
+  border: 1px solid #e1d7c3;
   border-radius: 6px;
-  background: #f9fafb;
+  background: #fbfaf7;
 }
 
 .actions {
@@ -169,7 +266,13 @@
 }
 
 .activeFilter {
-  background: #3b82f6;
+  background: #ad8b42;
+}
+
+@media (max-width: 700px) {
+  .shell { padding: 12px; }
+  .modeBanner { align-items: flex-start; padding: 12px; }
+  .modeBanner strong { font-size: 15px; }
 }
 
 .scrollButton {

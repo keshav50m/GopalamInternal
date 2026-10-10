@@ -17,6 +17,7 @@ export type SavedProduct = {
   r2Image?: string;
   resolvedImageUrl?: string;
   fallbackImageUrl?: string;
+  imageRemoved?: boolean;
   data?: ProductData;
   updatedAt?: string;
 };

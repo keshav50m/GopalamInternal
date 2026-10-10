@@ -550,6 +550,7 @@ export default function ProductPanel() {
               ? { r2Image: uploadedImage.r2Image || "" }
               : {}),
             fallbackImageUrl: uploadedImage.fallbackImageUrl,
+            imageRemoved: false,
             previewUrl: isSelectedRow
               ? currentRow.previewUrl
               : imageUrl,
@@ -565,6 +566,56 @@ export default function ProductPanel() {
     } catch (err) {
       scannerUploadCacheRef.current.delete(uploadKey);
       console.error(err);
+    }
+  };
+
+  const handleRemoveImage = async (index: number) => {
+    const row = latestRowsRef.current[index] || rows[index];
+    const barcode = normalizeBarcode(row?.barcode);
+    if (!barcode || !hasRowImage(row)) return;
+    if (!window.confirm(`Remove the saved image for barcode ${barcode}?`)) return;
+
+    if (activeImageUploadTasksRef.current.size > 0) {
+      await Promise.allSettled([...activeImageUploadTasksRef.current]);
+    }
+
+    setRows((current) => current.map((item, currentIndex) =>
+      currentIndex === index ? { ...item, __removingImage: true } : item
+    ));
+
+    try {
+      const response = await fetch("/api/saved-products", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ barcode }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Image removal failed");
+
+      qrLookupCacheRef.current.clear();
+      setSelectedImage(null);
+      setRows((current) => {
+        const nextRows = current.map((item, currentIndex) => currentIndex === index
+          ? {
+              ...item,
+              image: "",
+              r2Image: "",
+              imageUrl: "",
+              previewUrl: "",
+              fallbackImageUrl: "",
+              imageRemoved: true,
+              __removingImage: false,
+            }
+          : item
+        );
+        latestRowsRef.current = nextRows;
+        return nextRows;
+      });
+    } catch (removeError) {
+      setRows((current) => current.map((item, currentIndex) =>
+        currentIndex === index ? { ...item, __removingImage: false } : item
+      ));
+      alert(removeError instanceof Error ? removeError.message : "Image removal failed");
     }
   };
 
@@ -684,32 +735,41 @@ export default function ProductPanel() {
     [imageFilter, rows]
   );
 
-  const missingRowsForExcel = useMemo(
-    () => validProductRows.filter((row) =>
-      getImageFilterStatus(row) === "missing" && Boolean(getRowBarcode(row))
-    ),
-    [validProductRows]
+  const rowsForExcel = useMemo(
+    () => validProductRows.filter((row) => {
+      if (!getRowBarcode(row)) return false;
+      if (imageFilter === "present") return getImageFilterStatus(row) === "present";
+      if (imageFilter === "missing") return getImageFilterStatus(row) === "missing";
+      return true;
+    }),
+    [imageFilter, validProductRows]
   );
 
-  const downloadMissingBarcodeExcel = () => {
-    const barcodes = missingRowsForExcel
+  const excelFilterName = imageFilter === "all"
+    ? "all-products"
+    : imageFilter === "present"
+      ? "products-with-images"
+      : "products-missing-images";
+
+  const downloadBarcodeExcel = () => {
+    const barcodes = rowsForExcel
       .map(getRowBarcode);
 
     downloadSingleColumnWorkbook(
       "BARCODE",
       barcodes,
-      "products-missing-images-barcodes.xlsx"
+      `${excelFilterName}-barcodes.xlsx`
     );
   };
 
-  const downloadMissingQRCodeExcel = () => {
-    const qrCodes = missingRowsForExcel
+  const downloadQRCodeExcel = () => {
+    const qrCodes = rowsForExcel
       .map(getRowQRCode);
 
     downloadSingleColumnWorkbook(
       "qrCode",
       qrCodes,
-      "products-missing-images-qr-codes.xlsx"
+      `${excelFilterName}-qr-codes.xlsx`
     );
   };
 
@@ -914,12 +974,11 @@ export default function ProductPanel() {
             }}
           />
         </label>
-        {imageFilter === "missing" && (
           <>
             <button
               type="button"
-              onClick={downloadMissingBarcodeExcel}
-              disabled={missingRowsForExcel.length === 0}
+              onClick={downloadBarcodeExcel}
+              disabled={rowsForExcel.length === 0}
               style={{
                 backgroundColor: "#3b82f6",
                 color: "white",
@@ -928,10 +987,10 @@ export default function ProductPanel() {
                 borderRadius: "6px",
                 fontSize: "13px",
                 fontWeight: "bold",
-                cursor: missingRowsForExcel.length === 0
+                cursor: rowsForExcel.length === 0
                   ? "not-allowed"
                   : "pointer",
-                opacity: missingRowsForExcel.length === 0 ? 0.6 : 1,
+                opacity: rowsForExcel.length === 0 ? 0.6 : 1,
                 minHeight: "32px",
                 whiteSpace: "nowrap",
               }}
@@ -940,8 +999,8 @@ export default function ProductPanel() {
             </button>
             <button
               type="button"
-              onClick={downloadMissingQRCodeExcel}
-              disabled={missingRowsForExcel.length === 0}
+              onClick={downloadQRCodeExcel}
+              disabled={rowsForExcel.length === 0}
               style={{
                 backgroundColor: "#3b82f6",
                 color: "white",
@@ -950,10 +1009,10 @@ export default function ProductPanel() {
                 borderRadius: "6px",
                 fontSize: "13px",
                 fontWeight: "bold",
-                cursor: missingRowsForExcel.length === 0
+                cursor: rowsForExcel.length === 0
                   ? "not-allowed"
                   : "pointer",
-                opacity: missingRowsForExcel.length === 0 ? 0.6 : 1,
+                opacity: rowsForExcel.length === 0 ? 0.6 : 1,
                 minHeight: "32px",
                 whiteSpace: "nowrap",
               }}
@@ -961,7 +1020,6 @@ export default function ProductPanel() {
               Download QR Excel
             </button>
           </>
-        )}
       </div>
 
       <ProductTable
@@ -971,6 +1029,7 @@ export default function ProductPanel() {
         handleManualBarcode={(index: number, value: string) => handleManualBarcode(getOriginalRowIndex(index), value)}
         handleBarcodeLookup={(index: number, value: string) => handleBarcodeLookup(getOriginalRowIndex(index), value)}
         handleImage={(index: number, file: File) => handleImage(getOriginalRowIndex(index), file)}
+        handleRemoveImage={(index: number) => handleRemoveImage(getOriginalRowIndex(index))}
         lastQRRef={lastQRRef}
         lastBarcodeRef={lastBarcodeRef}
         totals={totals}

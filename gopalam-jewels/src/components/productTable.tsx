@@ -36,6 +36,7 @@ export default function ProductTable({
   handleManualBarcode,
   handleBarcodeLookup,
   handleImage,
+  handleRemoveImage,
   lastQRRef,
   lastBarcodeRef,
   totals,
@@ -85,44 +86,77 @@ export default function ProductTable({
               />
 
               <label htmlFor={`file-${i}`} style={{
+                boxSizing: "border-box",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "78px",
+                height: "22px",
                 padding: "2px 6px",
                 fontSize: "11px",
                 background: "#eee",
                 borderRadius: "4px",
-                cursor: "pointer"
+                cursor: "pointer",
+                whiteSpace: "nowrap"
               }}>
                 Choose File
               </label>
 
               {row.previewUrl || row.imageUrl ? (
                 <ProviderAwareImage
-                  alt={`Product ${row.barcode || row.data?.ITEMNO || "image"}`}
-                  primaryUrl={buildCloudinaryDeliveryUrl(
-                    row.previewUrl || row.imageUrl,
-                    CLOUDINARY_THUMBNAIL_TRANSFORMATION
-                  )}
-                  fallbackUrl={buildCloudinaryDeliveryUrl(
-                    row.fallbackImageUrl || "",
-                    CLOUDINARY_THUMBNAIL_TRANSFORMATION
-                  )}
-                  loading="lazy"
-                  decoding="async"
-                  width="80"
-                  style={{
-                    marginTop: "8px", borderRadius: "6px",
-                    cursor: "pointer",        // ✅ THIS IS KEY
-                    display: "block"          // (fix for some browsers)
-                  }}
-                  onClick={() => setSelectedImage({
-                    primaryUrl: row.previewUrl || row.imageUrl,
-                    fallbackUrl: row.fallbackImageUrl || "",
-                  })}
-                />
+                    alt={`Product ${row.barcode || row.data?.ITEMNO || "image"}`}
+                    primaryUrl={buildCloudinaryDeliveryUrl(
+                      row.previewUrl || row.imageUrl,
+                      CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                    )}
+                    fallbackUrl={buildCloudinaryDeliveryUrl(
+                      row.fallbackImageUrl || "",
+                      CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                    )}
+                    loading="lazy"
+                    decoding="async"
+                    width="80"
+                    style={{
+                      marginTop: "8px", borderRadius: "6px",
+                      cursor: "pointer",
+                      display: "block"
+                    }}
+                    onClick={() => setSelectedImage({
+                      primaryUrl: row.previewUrl || row.imageUrl,
+                      fallbackUrl: row.fallbackImageUrl || "",
+                    })}
+                  />
               ) : (
                 <div style={{ fontSize: "12px", color: "#888", marginTop: "6px" }}>
                   No file selected
                 </div>
               )}
+              {row.previewUrl || row.imageUrl ? (
+                <button
+                  type="button"
+                  disabled={!row.barcode || row.__removingImage}
+                  onClick={() => handleRemoveImage(i)}
+                  style={{
+                    boxSizing: "border-box",
+                    display: "block",
+                    width: "78px",
+                    height: "22px",
+                    marginTop: "6px",
+                    padding: "2px 3px",
+                    fontSize: "9px",
+                    lineHeight: "normal",
+                    color: "white",
+                    background: "#dc2626",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: row.barcode && !row.__removingImage ? "pointer" : "not-allowed",
+                    opacity: row.__removingImage ? 0.65 : 1,
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  {row.__removingImage ? "Removing…" : "Remove Image"}
+                </button>
+              ) : null}
             </td>
 
             {/* QR */}
