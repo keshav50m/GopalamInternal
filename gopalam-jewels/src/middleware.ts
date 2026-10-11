@@ -3,11 +3,15 @@ import { AUTH_COOKIE_NAME, verifySessionToken } from "@/lib/auth-shared";
 
 const PUBLIC_PATHS = ["/login", "/forgot-password"];
 const PUBLIC_API_PREFIX = "/api/auth/";
+const PUBLIC_CATALOGUE_PATH_PREFIX = "/catalogue/";
+const PUBLIC_CATALOGUE_API_PREFIX = "/api/catalogue/";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isPublicPage = PUBLIC_PATHS.includes(pathname);
   const isPublicApi = pathname.startsWith(PUBLIC_API_PREFIX);
+  const isPublicCatalogue = pathname.startsWith(PUBLIC_CATALOGUE_PATH_PREFIX);
+  const isPublicCatalogueApi = pathname.startsWith(PUBLIC_CATALOGUE_API_PREFIX);
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
@@ -20,7 +24,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (isPublicPage || isPublicApi) {
+  if (isPublicPage || isPublicApi || isPublicCatalogue || isPublicCatalogueApi) {
     return NextResponse.next();
   }
 

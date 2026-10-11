@@ -1,6 +1,6 @@
 import "server-only";
 
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 type R2Config = {
   bucketName: string;
@@ -83,4 +83,19 @@ export const uploadImageToR2 = async ({
     imageUrl: buildPublicUrl(publicBaseUrl, objectKey),
     objectKey,
   };
+};
+
+export const uploadPrivatePdfToR2 = async ({ body, objectKey }: { body: Uint8Array; objectKey: string }) => {
+  const { client } = getR2Config();
+  const bucketName = getRequiredEnvironmentVariable("R2_PRIVATE_BUCKET_NAME");
+  await client.send(new PutObjectCommand({ Bucket: bucketName, Key: objectKey, Body: body, ContentType: "application/pdf", CacheControl: "private, no-store" }));
+  return objectKey;
+};
+
+export const getPrivatePdfFromR2 = async (objectKey: string) => {
+  const { client } = getR2Config();
+  const bucketName = getRequiredEnvironmentVariable("R2_PRIVATE_BUCKET_NAME");
+  const response = await client.send(new GetObjectCommand({ Bucket: bucketName, Key: objectKey }));
+  if (!response.Body) throw new Error("Private PDF object has no body");
+  return response.Body.transformToByteArray();
 };

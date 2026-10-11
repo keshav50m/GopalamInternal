@@ -83,6 +83,22 @@ export default function ScannerPage() {
               Custom Search
             </Link>
 
+            <Link
+              href="/interactive-catalogue"
+              style={{
+                color: "#43391f",
+                background: "#ffffff",
+                border: "1px solid #d8c89f",
+                borderRadius: "6px",
+                padding: "9px 14px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: 700,
+              }}
+            >
+              Interactive Catalogue
+            </Link>
+
           </nav>
         </div>
       </div>

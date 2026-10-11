@@ -31,6 +31,9 @@ export default function CustomSearchPage() {
             <Link className={styles.activeNavLink} href="/custom-search">
               Custom Search
             </Link>
+            <Link className={styles.navLink} href="/interactive-catalogue">
+              Interactive Catalogue
+            </Link>
           </nav>
         </div>
       </header>
