@@ -9,6 +9,12 @@ export const ensureGoldProductIndexes = () => {
 
       await Promise.all([
         db.collection("savedProducts_Gold").createIndex(
+          { updatedAt: -1, _id: -1 }, { name: "gold_dashboard_recent" }
+        ),
+        db.collection("savedProducts_Gold").createIndex(
+          { "data.BARCODE": 1 }, { name: "gold_data_barcode_search" }
+        ),
+        db.collection("savedProducts_Gold").createIndex(
           { barcode: 1 },
           { name: "gold_barcode_search" }
         ),
@@ -25,6 +31,9 @@ export const ensureGoldProductIndexes = () => {
           { name: "gold_catalogue_lot_no_lookup" }
         ),
       ]);
+    }).catch((error) => {
+      goldIndexesPromise = null;
+      throw error;
     });
   }
 

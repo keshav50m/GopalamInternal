@@ -19,7 +19,7 @@ export default function CustomSearchPage() {
           <AdminButton />
 
           <nav className={styles.navLinks} aria-label="Primary navigation">
-            <Link className={styles.navLink} href="/">
+            <Link className={styles.navLink} href="/scanner">
               Scanner
             </Link>
             <Link className={styles.navLink} href="/dashboard">

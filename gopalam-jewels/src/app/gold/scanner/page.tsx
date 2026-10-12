@@ -1,3 +1,4 @@
+import Link from "next/link";
 import AdminButton from "@/components/AdminButton";
 import ChangeTypeButton from "@/components/ChangeTypeButton";
 import GoldProductLookup from "@/components/gold/GoldProductLookup";
@@ -11,6 +12,7 @@ export default function GoldScannerPage() {
           <img src="/gopalam-jewels-logo.png" className="logo" alt="Gopalam Jewels" />
           <AdminButton />
           <nav style={{ display: "flex", gap: "10px", marginLeft: "auto" }} aria-label="Gold navigation">
+            <Link href="/gold/dashboard" style={{ color: "#72551f", background: "#fff8e8", border: "1px solid #9a7a30", borderRadius: "6px", padding: "9px 14px", fontSize: "14px", fontWeight: 700, textDecoration: "none" }}>Dashboard</Link>
             <span style={{ color: "#fff", background: "#9a7a30", border: "1px solid #9a7a30", borderRadius: "6px", padding: "9px 14px", fontSize: "14px", fontWeight: 700 }}>
               Gold Scanner
             </span>
@@ -23,4 +25,3 @@ export default function GoldScannerPage() {
     </div>
   );
 }
-

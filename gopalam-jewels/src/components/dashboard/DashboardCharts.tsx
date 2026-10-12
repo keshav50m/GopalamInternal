@@ -4,6 +4,8 @@ import styles from "./Dashboard.module.css";
 type Props = {
   stoneDistribution: ChartPoint[];
   uploadTrend: ChartPoint[];
+  distributionTitle?: string;
+  distributionEmptyLabel?: string;
 };
 
 const formatTrendLabel = (label: string) => {
@@ -41,16 +43,16 @@ function BarList({ points, emptyLabel }: { points: ChartPoint[]; emptyLabel: str
   );
 }
 
-export default function DashboardCharts({ stoneDistribution, uploadTrend }: Props) {
+export default function DashboardCharts({ stoneDistribution, uploadTrend, distributionTitle = "Stone Distribution", distributionEmptyLabel = "No stone data available" }: Props) {
   const maxTrendValue = Math.max(...uploadTrend.map((point) => point.value), 1);
 
   return (
     <section className={styles.chartGrid}>
       <div className={styles.panel}>
         <div className={styles.panelHeader}>
-          <h2>Stone Distribution</h2>
+          <h2>{distributionTitle}</h2>
         </div>
-        <BarList points={stoneDistribution} emptyLabel="No stone data available" />
+        <BarList points={stoneDistribution} emptyLabel={distributionEmptyLabel} />
       </div>
 
       <div className={styles.panel}>
