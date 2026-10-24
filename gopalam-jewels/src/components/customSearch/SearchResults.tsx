@@ -67,7 +67,7 @@ export default function SearchResults({
               const data = product.data || {};
 
               return (
-                <tr key={product._id}>
+                <tr key={product._id} style={{ backgroundColor: product.isSold === true ? "#fee2e2" : undefined }}>
                   <td className={styles.checkboxColumn}>
                     <input
                       type="checkbox"

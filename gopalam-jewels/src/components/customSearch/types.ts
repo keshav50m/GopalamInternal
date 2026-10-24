@@ -27,6 +27,7 @@ export type SearchProduct = {
   imageCatalogueResolvedImageUrl?: string;
   imageCatalogueFallbackImageUrl?: string;
   imageRemoved?: boolean;
+  isSold?: boolean;
   data?: {
     BARCODE?: string;
     ITEMNO?: string;

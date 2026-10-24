@@ -140,6 +140,7 @@ export default function GoldProductLookup() {
   const [error, setError] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ primary: string; fallback: string } | null>(null);
   const latestRowsRef = useRef(rows);
+  const initializedRowsRef = useRef(false);
   const lastQRRef = useRef<HTMLInputElement>(null);
   const lastBarcodeRef = useRef<HTMLInputElement>(null);
   const previousRowCountRef = useRef(rows.length);
@@ -157,6 +158,26 @@ export default function GoldProductLookup() {
   }, []);
 
   useEffect(() => {
+    if (initializedRowsRef.current) return;
+    initializedRowsRef.current = true;
+    // Consume custom-search selections before reload handling clears normal rows.
+    try {
+      const handoff = sessionStorage.getItem("goldSearchSelection");
+      if (handoff) {
+        const selected: unknown = JSON.parse(handoff);
+        if (!Array.isArray(selected) || !selected.length) throw new Error("Invalid Gold search selection");
+        const restored = selected.map(row => ({ ...createEmptyRow(), ...row, id: row.id || crypto.randomUUID() }));
+        sessionStorage.removeItem("goldSearchSelection");
+        setRows(restored);
+        latestRowsRef.current = restored;
+        previousRowCountRef.current = restored.length;
+        return;
+      }
+    } catch (handoffError) {
+      sessionStorage.removeItem("goldSearchSelection");
+      console.error("Unable to restore Gold search selection:", handoffError);
+    }
+
     const navigationEntry = performance.getEntriesByType("navigation")[0] as
       | PerformanceNavigationTiming
       | undefined;

@@ -13,6 +13,9 @@ export default function Page() {
     if (jewelleryType === "casting") {
       window.location.href = "/scanner";
     }
+    if (jewelleryType === "polki") {
+      window.location.href = "/polki/scanner";
+    }
     if (jewelleryType === "gold") {
       window.location.href = "/gold/scanner";
     }
@@ -23,10 +26,7 @@ export default function Page() {
     setJewelleryType(type);
   };
 
-  const resetType = () => {
-    localStorage.removeItem("jewelleryType");
-    setJewelleryType(null);
-  };
+
 
   if (!jewelleryType) {
     if (!jewelleryType) {
@@ -202,41 +202,6 @@ export default function Page() {
         </div>
       );
     }
-  }
-
-  if (jewelleryType === "polki") {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          background: "#f5f3ef",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <h1>Polki Jewellery</h1>
-
-          <h2>🚧 Work Under Construction</h2>
-
-          <p>
-            This module is currently being developed and will be available soon.
-          </p>
-
-          <button
-            onClick={resetType}
-            style={{
-              marginTop: "20px",
-              padding: "12px 25px",
-              cursor: "pointer",
-            }}
-          >
-            Back To Selection
-          </button>
-        </div>
-      </div>
-    );
   }
 
   // return (

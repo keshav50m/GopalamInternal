@@ -57,7 +57,7 @@ export default function GoldDashboardPage() {
   return <main className={styles.dashboardShell}>
     <header className={styles.topBar}><div className={styles.topBarInner}>
       <div className={styles.brandArea}><ChangeTypeButton /><div className={styles.brandBlock}><span>Gopalam Jewels</span><h1>Gold Dashboard</h1></div></div>
-      <AdminButton /><nav className={styles.navLinks} aria-label="Gold navigation"><Link className={styles.navLink} href="/gold/scanner">Gold Scanner</Link><Link className={styles.activeNavLink} href="/gold/dashboard" aria-current="page">Dashboard</Link></nav>
+      <AdminButton /><nav className={styles.navLinks} aria-label="Gold navigation"><Link className={styles.navLink} href="/gold/scanner">Gold Scanner</Link><Link className={styles.activeNavLink} href="/gold/dashboard" aria-current="page">Dashboard</Link><Link className={styles.navLink} href="/gold/custom-search">Custom Search</Link></nav>
     </div></header>
     <div className={styles.content}>
       <div className={styles.statusBar}>Summary refreshes within 60 seconds. Dates use India time. <button onClick={() => setRefresh(value => value + 1)} disabled={loading}>Refresh</button></div>

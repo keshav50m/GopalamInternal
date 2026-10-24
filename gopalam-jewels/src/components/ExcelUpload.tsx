@@ -32,11 +32,11 @@ export default function ExcelUpload({ setRows }: any) {
             const matchedProducts = Array.isArray(lookupData.products) ? lookupData.products : [];
             const productsByBarcode = new Map(matchedProducts.map((product: any) => [normalizeBarcode(product.barcode), product]));
             setRows((currentRows: any[]) => currentRows.map((row) => {
-                if (row.__barcodeExcelImportId !== importId) return row;
+                if (row.__barcodeExcelImportId !== importId) return productsByBarcode.has(normalizeBarcode(row.barcode)) ? { ...row, isSold: (productsByBarcode.get(normalizeBarcode(row.barcode)) as any)?.isSold === true } : row;
                 const match = productsByBarcode.get(normalizeBarcode(row.barcode));
                 const resolvedImage = resolveProductImageCandidates(match || { barcode: row.barcode, data: null }, matchedProducts);
                 const hasCurrentImage = Boolean(row.imageUrl || row.previewUrl);
-                const updatedRow = { ...row, image: resolvedImage.image || row.image || "", r2Image: resolvedImage.r2Image || row.r2Image || "", imageUrl: hasCurrentImage ? row.imageUrl : resolvedImage.primaryUrl, previewUrl: hasCurrentImage ? row.previewUrl || row.imageUrl : resolvedImage.primaryUrl, fallbackImageUrl: hasCurrentImage ? row.fallbackImageUrl || "" : resolvedImage.fallbackUrl, data: (match as any)?.data || null };
+                const updatedRow = { ...row, isSold: (match as any)?.isSold === true, image: resolvedImage.image || row.image || "", r2Image: resolvedImage.r2Image || row.r2Image || "", imageUrl: hasCurrentImage ? row.imageUrl : resolvedImage.primaryUrl, previewUrl: hasCurrentImage ? row.previewUrl || row.imageUrl : resolvedImage.primaryUrl, fallbackImageUrl: hasCurrentImage ? row.fallbackImageUrl || "" : resolvedImage.fallbackUrl, data: (match as any)?.data || null };
                 delete updatedRow.__barcodeExcelImportId;
                 return updatedRow;
             }));

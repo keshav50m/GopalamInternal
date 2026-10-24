@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
 import { calculateTotals } from "@/utils/calculateTotals";
 import ProductTable from "@/components/productTable";
+import MarkSold from "@/components/MarkSold";
 import ExcelUpload from "@/components/ExcelUpload";
 import QRCodeExcelUpload from "@/components/QRCodeExcelUpload";
 import { resolveProductImageCandidates } from "@/utils/resolveProductImage";
@@ -217,6 +218,35 @@ export default function ProductPanel() {
     };
   }, [rows]);
 
+  useEffect(() => {
+    let disposed = false;
+    const refreshStockStatus = async () => {
+      const snapshot = latestRowsRef.current;
+      const barcodes = [...new Set(snapshot.map(getRowBarcode).filter(Boolean))];
+      if (!barcodes.length) return;
+      try {
+        const response = await fetch("/api/saved-products/lookup", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ barcodes }),
+        });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (disposed) return;
+        const status = new Map<string, boolean>((result.products || []).map((product: any) => [normalizeBarcode(product.barcode), product.isSold === true]));
+        setRows((current) => current.map((row) => status.has(getRowBarcode(row)) && snapshot.includes(row)
+          ? { ...row, isSold: status.get(getRowBarcode(row)) } : row));
+      } catch (error) { console.error("Unable to refresh stock status:", error); }
+    };
+    // Let restored scanner rows reach the latest-row ref before reading their status.
+    const initialRefresh = window.setTimeout(() => void refreshStockStatus(), 0);
+    window.addEventListener("focus", refreshStockStatus);
+    return () => {
+      disposed = true;
+      window.clearTimeout(initialRefresh);
+      window.removeEventListener("focus", refreshStockStatus);
+    };
+  }, []);
+
   useEffect(() => () => {
     qrLookupTimeoutsRef.current.forEach((timeout) =>
       window.clearTimeout(timeout)
@@ -261,6 +291,7 @@ export default function ProductPanel() {
       }
 
       const lookupData = await qrLookupCacheRef.current.get(cacheKey)!;
+      qrLookupCacheRef.current.delete(cacheKey);
       const matchedProducts = Array.isArray(lookupData.products)
         ? lookupData.products
         : [];
@@ -284,6 +315,7 @@ export default function ProductPanel() {
           currentIndex === index && row.qrCode === qrValue
             ? {
                 ...row,
+                isSold: match?.isSold === true,
                 barcode: normalizeBarcode(match?.barcode || barcode),
                 data: match?.data || parsed,
                 image: matchedImage.image,
@@ -292,7 +324,7 @@ export default function ProductPanel() {
                 previewUrl: matchedImage.primaryUrl,
                 fallbackImageUrl: matchedImage.fallbackUrl,
               }
-            : row
+            : getRowBarcode(row) === barcode ? { ...row, isSold: match?.isSold === true } : row
         )
       );
     } catch (error) {
@@ -428,7 +460,7 @@ export default function ProductPanel() {
           return currentRows;
         }
 
-        const nextRows = [...currentRows];
+        const nextRows = currentRows.map((row) => getRowBarcode(row) === barcode ? { ...row, isSold: match?.isSold === true } : row);
         if (!match) {
           nextRows[index] = {
             ...currentRow,
@@ -444,6 +476,7 @@ export default function ProductPanel() {
         ]);
         nextRows[index] = {
           ...currentRow,
+          isSold: match.isSold === true,
           barcode: normalizeBarcode(match.barcode),
           data: match.data,
           image: matchedImage.image,
@@ -661,6 +694,13 @@ export default function ProductPanel() {
       });
 
       if (res.ok) {
+        const savedBarcodes = new Set(toSave.map((product) => normalizeBarcode(product.barcode)));
+        qrLookupCacheRef.current.clear();
+        setRows((current) => {
+          const next = current.map((row) => savedBarcodes.has(getRowBarcode(row)) ? { ...row, isSold: false } : row);
+          latestRowsRef.current = next;
+          return next;
+        });
         alert(`✅ ${toSave.length} products saved!`);
         const savedImageBarcodes = new Set(
           toSave
@@ -707,6 +747,7 @@ export default function ProductPanel() {
   });
 
   const [showPopup, setShowPopup] = useState(false);
+  const [inStockOnlyForPDF, setInStockOnlyForPDF] = useState(false);
   const validProductRows = useMemo(
     () => rows.filter(isValidProductRow),
     [rows]
@@ -777,8 +818,8 @@ export default function ProductPanel() {
     filteredRows[displayIndex]?.__originalIndex ?? displayIndex;
 
   const preparedPdfRows = useMemo(
-    () => filteredRows.map(stripDisplayMetadata),
-    [filteredRows]
+    () => filteredRows.filter((row) => !inStockOnlyForPDF || row.isSold !== true).map(stripDisplayMetadata),
+    [filteredRows, inStockOnlyForPDF]
   );
   const pdfRowsPreview = useMemo(
     () => uniqueItemNoForPDF || pdfVersion === "version5"
@@ -913,6 +954,11 @@ export default function ProductPanel() {
             alignItems: "flex-start",
           }}
         >
+          <MarkSold onMarked={(barcodes) => {
+            const sold = new Set(barcodes);
+            qrLookupCacheRef.current.clear();
+            setRows((current) => current.map((row) => sold.has(getRowBarcode(row)) ? { ...row, isSold: true } : row));
+          }} />
           <div>
             <h3>Barcode Excel</h3>
             <ExcelUpload
@@ -1163,6 +1209,10 @@ export default function ProductPanel() {
                 />
                 Unique Item No
               </label>
+              <label style={{ display: "block", marginBottom: "10px" }}>
+                <input type="checkbox" checked={inStockOnlyForPDF} onChange={(event) => setInStockOnlyForPDF(event.target.checked)} />
+                Items in stock only
+              </label>
               <h3>Select Fields</h3>
 
               {Object.keys(selectedFields).map((key) => (
@@ -1332,6 +1382,10 @@ export default function ProductPanel() {
                       return;
                     }
 
+                    if (inStockOnlyForPDF && !preparedPdfRows.some(isValidProductRow)) {
+                      alert("No in-stock products are available for this PDF.");
+                      return;
+                    }
                     setIsGenerating(true);
                     setProgress(0);
                     const handlePdfProgress = (nextProgress: number) =>
@@ -1339,7 +1393,7 @@ export default function ProductPanel() {
                         Math.min(100, Math.max(0, nextProgress))
                       );
 
-                    const rowsForPdf = filteredRows.map(stripDisplayMetadata);
+                    const rowsForPdf = preparedPdfRows;
                     const currentPdfRows = uniqueItemNoForPDF && pdfVersion !== "version5"
                       ? getUniqueItemNoRows(rowsForPdf)
                       : rowsForPdf;

@@ -43,6 +43,7 @@ const toScannerRow = (product: SearchProduct, products: SearchProduct[]) => {
     previewUrl: image.primaryUrl,
     fallbackImageUrl: image.fallbackUrl,
     data: product.data || null,
+    isSold: product.isSold === true,
   };
 };
 

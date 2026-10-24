@@ -1,0 +1,735 @@
+"use client";
+import { polkiFetch } from "@/utils/polki/apiFetch";
+
+import { useState, useRef } from "react";
+import styles from "./ImageCatalogue.module.css";
+import {
+  uploadProductImage,
+  type UploadedProductImage,
+} from "@/utils/polki/uploadProductImage";
+import {
+  buildCloudinaryDeliveryUrl,
+  CLOUDINARY_THUMBNAIL_TRANSFORMATION,
+  getFileUploadKey,
+} from "@/utils/cloudinaryDelivery";
+import { normalizeStoredImageUrl } from "@/utils/normalizeStoredImageUrl";
+import ProviderAwareImage from "@/components/ProviderAwareImage";
+import PasteImport from "@/components/PasteImport";
+import { getPastedLines } from "@/utils/pasteImport";
+import * as XLSX from "xlsx";
+
+type CatalogueUploadRow = {
+  id: string;
+  file: File | null;
+  barcode: string;
+  itemNo: string;
+  previewUrl: string;
+  image?: string;
+  r2Image?: string;
+  fallbackImageUrl?: string;
+};
+
+type ImageFilter = "all" | "present" | "missing";
+
+const createEmptyRow = (): CatalogueUploadRow => ({
+  id: `${Date.now()}-${Math.random()}`,
+  file: null,
+  barcode: "",
+  itemNo: "",
+  previewUrl: "",
+});
+
+const isValidCatalogueRow = (row: CatalogueUploadRow) =>
+  Boolean(
+    String(row.barcode || "").trim() ||
+      String(row.itemNo || "").trim() ||
+      row.file ||
+      String(row.previewUrl || "").trim()
+  );
+
+const hasCatalogueImage = (row: CatalogueUploadRow) =>
+  Boolean(row.file || normalizeStoredImageUrl(row.previewUrl));
+
+export default function ImageCatalogueUpload() {
+  const [rows, setRows] = useState<CatalogueUploadRow[]>([createEmptyRow()]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [imageFilter, setImageFilter] = useState<ImageFilter>("all");
+  const barcodeRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const saveImageCatalogueItems = async (
+    items: { itemNo: string; image: string; r2Image?: string }[]
+  ) => {
+    const res = await polkiFetch("/api/polki/image-catalogue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Image catalogue save failed");
+    }
+  };
+
+  const updateRow = (id: string, updates: Partial<CatalogueUploadRow>) => {
+    setRows((prevRows) =>
+      prevRows.map((row) => (row.id === id ? { ...row, ...updates } : row))
+    );
+  };
+
+  const fetchImageByItemNo = async (
+    id: string,
+    itemNo: string
+  ) => {
+    if (!itemNo.trim()) return;
+
+    try {
+      const res = await polkiFetch(
+        `/api/polki/image-catalogue?itemNo=${encodeURIComponent(
+          itemNo.trim()
+        )}`
+      );
+
+      const data = await res.json();
+
+      if (data?.image) {
+        updateRow(id, {
+          previewUrl: data.resolvedImageUrl || data.image,
+          image: data.image || "",
+          fallbackImageUrl: data.fallbackImageUrl || "",
+          ...(Object.prototype.hasOwnProperty.call(data, "r2Image")
+            ? { r2Image: String(data.r2Image || "") }
+            : {}),
+        });
+
+        setRows((prevRows) => {
+          const currentRow = prevRows.find((r) => r.id === id);
+
+          // Only add a new row if this is the last row
+          if (
+            currentRow &&
+            prevRows[prevRows.length - 1]?.id === id
+          ) {
+            return [...prevRows, createEmptyRow()];
+          }
+
+          return prevRows;
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchProductByBarcode = async (
+    id: string,
+    barcode: string
+  ) => {
+    if (!barcode.trim()) return;
+    // ADD NEW ROW IMMEDIATELY
+    setRows(prevRows => {
+      const isLastRow =
+        prevRows[prevRows.length - 1]?.id === id;
+
+      if (!isLastRow) return prevRows;
+
+      const newRow = createEmptyRow();
+
+      setTimeout(() => {
+        barcodeRefs.current[newRow.id]?.focus();
+      }, 100);
+
+      return [...prevRows, newRow];
+    });
+
+
+    try {
+      const res = await polkiFetch(
+        `/api/polki/saved-products?barcode=${encodeURIComponent(
+          barcode.trim()
+        )}`
+      );
+
+      const data = await res.json();
+
+      setRows((prevRows) => {
+        const updatedRows = prevRows.map((row) => {
+          if (row.id !== id) return row;
+
+          return {
+            ...row,
+            barcode: barcode.trim(),
+
+            // if product found -> auto populate
+            itemNo:
+              data?.product?.data?.ITEM ||
+              row.itemNo,
+
+            previewUrl:
+              data?.product?.imageCatalogueResolvedImageUrl ||
+              data?.product?.resolvedImageUrl ||
+              data?.product?.imageCatalogueImage ||
+              data?.product?.image ||
+              row.previewUrl,
+            fallbackImageUrl:
+              data?.product?.imageCatalogueFallbackImageUrl ||
+              data?.product?.fallbackImageUrl ||
+              row.fallbackImageUrl || "",
+            r2Image:
+              data?.product?.imageCatalogueR2Image ||
+              data?.product?.r2Image ||
+              row.r2Image,
+            image:
+              data?.product?.imageCatalogueImage ||
+              data?.product?.image ||
+              row.image || "",
+          };
+        });
+
+        return updatedRows;
+      });
+    } catch (error) {
+      console.error(error);
+
+      // Even if API fails, still add row
+      setRows((prevRows) => {
+        const updatedRows = prevRows.map((row) =>
+          row.id === id
+            ? {
+              ...row,
+              barcode: barcode.trim(),
+            }
+            : row
+        );
+
+        return updatedRows;
+      });
+    }
+  };
+
+  const handleFileChange = (id: string, file: File | null) => {
+    const previewUrl = file ? URL.createObjectURL(file) : "";
+    updateRow(id, { file, previewUrl });
+  };
+
+  const importCatalogueExcel = async (file: File, mode: "barcode" | "qr") => {
+    try {
+      setError("");
+      setMessage("");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await polkiFetch(
+        mode === "qr" ? "/api/polki/image-catalogue/qr-excel" : "/api/polki/image-catalogue/excel",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || `${mode === "qr" ? "QR " : ""}Excel upload failed`
+        );
+      }
+
+      const newRows = data.rows.map(
+        (row: any) => ({
+          id: `${Date.now()}-${Math.random()}`,
+          file: null,
+          barcode: row.barcode || "",
+          itemNo: row.itemNo,
+          previewUrl: row.resolvedImageUrl || row.image || "",
+          image: row.image || "",
+          fallbackImageUrl: row.fallbackImageUrl || "",
+          r2Image: row.r2Image || "",
+        })
+      );
+
+      setRows(
+        newRows.length
+          ? [...newRows, createEmptyRow()]
+          : [createEmptyRow()]
+      );
+      setImageFilter("all");
+
+      setMessage(
+        `${newRows.length} unique Item Nos loaded${mode === "qr" ? " from QR data" : ""}`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : `${mode === "qr" ? "QR " : ""}Excel upload failed`
+      );
+    }
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await importCatalogueExcel(file, "barcode");
+    e.target.value = "";
+  };
+
+  const handleQRExcelUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    await importCatalogueExcel(file, "qr");
+    e.target.value = "";
+  };
+
+  const importPastedCatalogueValues = async (text: string, mode: "barcode" | "qr") => {
+    const values = getPastedLines(text, mode === "qr" ? ["qrCode", "QR_CODE"] : ["BARCODE"]);
+    if (values.length === 0) {
+      setError("No valid values were pasted.");
+      return;
+    }
+    const header = mode === "qr" ? "qrCode" : "BARCODE";
+    const sheet = XLSX.utils.aoa_to_sheet([[header], ...values.map((value) => [value])]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+    const bytes = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    await importCatalogueExcel(new File([bytes], `pasted-${mode}.xlsx`, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), mode);
+  };
+
+  const handleAddRow = () => {
+    setRows((prevRows) => [...prevRows, createEmptyRow()]);
+    setMessage("");
+    setError("");
+  };
+
+  const handleRemoveRow = (id: string) => {
+    setRows((prevRows) => {
+      const updatedRows = prevRows.filter((row) => row.id !== id);
+      return updatedRows.length ? updatedRows : [createEmptyRow()];
+    });
+    setMessage("");
+    setError("");
+  };
+
+  const handleRemoveAll = () => {
+    setRows([createEmptyRow()]);
+    setImageFilter("all");
+    setMessage("");
+    setError("");
+  };
+
+  const handleUploadAll = async () => {
+    setMessage("");
+    setError("");
+
+    const invalidRowIndex = rows.findIndex(
+      (row) =>
+        !hasCatalogueImage(row) ||
+        !row.itemNo.trim()
+    );
+
+    if (invalidRowIndex !== -1) {
+      setError(`Row ${invalidRowIndex + 1}: image and Item No are required.`);
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+
+      const validRows = rows.filter(
+        (row) => row.itemNo.trim()
+      );
+      const uploadCache = new Map<string, Promise<UploadedProductImage>>();
+      const itemsToSave: { itemNo: string; image: string; r2Image?: string }[] = [];
+
+      for (const row of validRows) {
+        let imageUrl = row.previewUrl;
+        let cloudinaryUrl = row.image || row.previewUrl;
+        let r2Image = row.r2Image;
+
+        if (row.file) {
+          const uploadKey = await getFileUploadKey(
+            row.file,
+            row.itemNo
+          );
+
+          if (!uploadCache.has(uploadKey)) {
+            uploadCache.set(
+              uploadKey,
+              uploadProductImage(row.file)
+            );
+          }
+
+          const uploadedImage = await uploadCache.get(uploadKey)!;
+          imageUrl = uploadedImage.resolvedImageUrl;
+          cloudinaryUrl = uploadedImage.cloudinaryUrl;
+          if (Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")) {
+            r2Image = uploadedImage.r2Image || "";
+          }
+
+          if (row.previewUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(row.previewUrl);
+          }
+
+          updateRow(row.id, {
+            file: null,
+            previewUrl: imageUrl,
+            image: cloudinaryUrl,
+            ...(Object.prototype.hasOwnProperty.call(uploadedImage, "r2Image")
+              ? { r2Image: uploadedImage.r2Image || "" }
+              : {}),
+            fallbackImageUrl: uploadedImage.fallbackImageUrl,
+          });
+        }
+
+        itemsToSave.push({
+          itemNo: row.itemNo.trim(),
+          image: cloudinaryUrl,
+          ...(r2Image !== undefined
+            ? { r2Image: String(r2Image || "") }
+            : {}),
+        });
+      }
+
+      await saveImageCatalogueItems(itemsToSave);
+
+      setMessage(`${validRows.length} image${validRows.length === 1 ? "" : "s"} uploaded successfully.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const validRows = rows.filter(isValidCatalogueRow);
+  const allProductsCount = validRows.length;
+  const imagesPresentCount = validRows.filter(hasCatalogueImage).length;
+  const imagesMissingCount = validRows.filter(
+    (row) => !hasCatalogueImage(row)
+  ).length;
+  const displayedRows = rows.filter((row) => {
+    if (imageFilter === "all") return true;
+    if (!isValidCatalogueRow(row)) return false;
+    if (imageFilter === "present") return hasCatalogueImage(row);
+    return !hasCatalogueImage(row);
+  });
+  const imageFilterButtons: {
+    key: ImageFilter;
+    label: string;
+  }[] = [
+    {
+      key: "all",
+      label: `All Products (${allProductsCount})`,
+    },
+    {
+      key: "present",
+      label: `Images Present (${imagesPresentCount})`,
+    },
+    {
+      key: "missing",
+      label: `Images Missing (${imagesMissingCount})`,
+    },
+  ];
+
+  return (
+    <div className={styles.card}>
+      {/* <div style={{ marginBottom: "20px" }}>
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={handleExcelUpload}
+          disabled={isUploading}
+        />
+      </div> */}
+      <div
+        style={{
+          marginBottom: "24px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "18px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          <label
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#43391f",
+            }}
+          >
+            Barcode Excel Upload
+          </label>
+
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleExcelUpload}
+            disabled={isUploading}
+          />
+          <PasteImport label="Paste barcodes" placeholder="One barcode per line" disabled={isUploading} onImport={(text) => importPastedCatalogueValues(text, "barcode")} />
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          <label
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#43391f",
+            }}
+          >
+            QR Excel Upload
+          </label>
+
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleQRExcelUpload}
+            disabled={isUploading}
+          />
+          <PasteImport label="Paste QR codes" placeholder="One complete QR value per line" disabled={isUploading} onImport={(text) => importPastedCatalogueValues(text, "qr")} />
+        </div>
+      </div>
+      <div className={styles.tableWrap}>
+        <table className={styles.catalogueTable}>
+          <thead>
+            <tr>
+              <th>Image</th>
+              <th>Barcode</th>
+              <th>Item</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayedRows.map((row, index) => (
+              <tr key={row.id}>
+                <td style={{ verticalAlign: "middle" }}>
+                  <div className={styles.imageCell}>
+                    <label className={styles.filePicker}>
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={isUploading}
+                        style={{ display: "none" }}
+                        onChange={(event) =>
+                          handleFileChange(
+                            row.id,
+                            event.target.files?.[0] || null
+                          )
+                        }
+                      />
+                    </label>
+                    {hasCatalogueImage(row) ? (
+                      <ProviderAwareImage
+                        className={styles.thumbnail}
+                        primaryUrl={buildCloudinaryDeliveryUrl(
+                          row.previewUrl,
+                          CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                        )}
+                        fallbackUrl={buildCloudinaryDeliveryUrl(
+                          row.fallbackImageUrl || "",
+                          CLOUDINARY_THUMBNAIL_TRANSFORMATION
+                        )}
+                        loading="lazy"
+                        decoding="async"
+                        alt={`Preview ${index + 1}`}
+                      />
+                    ) : (
+                      <span className={styles.noPreview}>No image selected</span>
+                    )}
+                  </div>
+                </td>
+                <td>
+                  <input
+                    ref={(el) => {
+                      barcodeRefs.current[row.id] = el;
+                    }}
+                    className={styles.textInput}
+                    type="text"
+                    value={row.barcode || ""}
+                    placeholder="Scan Barcode"
+                    onChange={(e) =>
+                      updateRow(row.id, {
+                        barcode: e.target.value,
+                      })
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        fetchProductByBarcode(
+                          row.id,
+                          row.barcode || ""
+                        );
+                      }
+                    }}
+                  />
+                </td>
+                <td>
+                  {/* <input
+                    className={styles.textInput}
+                    type="text"
+                    value={row.itemNo}
+                    disabled={isUploading}
+                    onChange={(event) => {
+                      updateRow(row.id, {
+                        itemNo: event.target.value,
+                      });
+                    }}
+                    onBlur={() =>
+                      fetchImageByItemNo(
+                        row.id,
+                        row.itemNo
+                      )
+                    }
+                    placeholder="Enter Item No"
+                  /> */}
+                  <input
+                    className={styles.textInput}
+                    type="text"
+                    value={row.itemNo}
+                    disabled={isUploading}
+                    onChange={(event) => {
+                      const value = event.target.value;
+
+                      updateRow(row.id, {
+                        itemNo: value,
+                      });
+
+                      if (value.trim().length >= 3) {
+                        fetchImageByItemNo(row.id, value);
+                      }
+                    }}
+                    placeholder="Enter Item No"
+                  />
+                </td>
+                <td style={{ verticalAlign: "middle", textAlign: "center" }}>
+                  <button
+                    className={styles.removeButton}
+                    disabled={isUploading}
+                    onClick={() => handleRemoveRow(row.id)}
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={styles.actionRow}>
+        {imageFilterButtons.map((button) => (
+          <button
+            key={button.key}
+            className={
+              imageFilter === button.key
+                ? styles.button
+                : styles.secondaryButton
+            }
+            disabled={isUploading}
+            onClick={() => setImageFilter(button.key)}
+          >
+            {button.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.actionRow}>
+        <button
+          className={styles.button}
+          disabled={isUploading}
+          onClick={handleUploadAll}
+        >
+          {isUploading ? "Uploading..." : "Upload All Images"}
+        </button>
+        <button
+          className={styles.secondaryButton}
+          disabled={isUploading}
+          onClick={handleAddRow}
+        >
+          + Add Image
+        </button>
+        <button
+          className={styles.removeButton}
+          disabled={isUploading}
+          onClick={handleRemoveAll}
+        >
+          Remove All
+        </button>
+      </div>
+
+      {message ? <div className={styles.success}>{message}</div> : null}
+      {error ? <div className={styles.error}>{error}</div> : null}
+
+      <button
+        onClick={() => {
+          window.scrollTo({
+            top: 0,
+            behavior: "smooth",
+          });
+        }}
+        style={{
+          position: "fixed",
+          right: "24px",
+          bottom: "78px",
+          zIndex: 900,
+          backgroundColor: "#111827",
+          color: "white",
+          padding: "12px 16px",
+          border: "none",
+          borderRadius: "999px",
+          fontSize: "14px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+        }}
+      >
+        ↑ Top
+      </button>
+
+      <button
+        onClick={() => {
+          window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: "smooth",
+          });
+        }}
+        style={{
+          position: "fixed",
+          right: "24px",
+          bottom: "24px",
+          zIndex: 900,
+          backgroundColor: "#111827",
+          color: "white",
+          padding: "12px 16px",
+          border: "none",
+          borderRadius: "999px",
+          fontSize: "14px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+        }}
+      >
+        ↓ Bottom
+      </button>
+    </div>
+  );
+}

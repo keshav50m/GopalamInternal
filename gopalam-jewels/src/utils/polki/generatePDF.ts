@@ -1,0 +1,378 @@
+import { runPolkiPDFChunks, partFilename } from "@/utils/polki/pdfChunks";
+import {
+    buildCloudinaryDeliveryUrl,
+    CLOUDINARY_PDF_TRANSFORMATION,
+    getCloudinaryAssetKey,
+} from "@/utils/cloudinaryDelivery";
+import {
+    getOrCreateBoundedCacheEntry,
+    fetchImageBlob,
+    imageLoadProgress,
+    pdfDrawProgress,
+    preloadWithConcurrency,
+    loadWithImageFallback,
+    type PDFProgressCallback,
+} from "@/utils/polki/pdfImagePipeline";
+
+
+const compressImageCandidate = async (src: string, quality = 0.5, maxWidth = 600) => {
+    const blob = await fetchImageBlob(src);
+    if (!blob) return null;
+    return new Promise<string | null>((resolve) => {
+        const img = new Image();
+        const decodeTimeout = window.setTimeout(() => { img.src = ""; URL.revokeObjectURL(objectUrl); resolve(null); }, 12000);
+        const objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
+
+        img.onload = () => {
+            try {
+            clearTimeout(decodeTimeout);
+            const canvas = document.createElement("canvas");
+            const scale = Math.min(1, maxWidth / img.width);
+
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+
+            const ctx = canvas.getContext("2d");
+            ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            URL.revokeObjectURL(objectUrl);
+            resolve(canvas.toDataURL("image/jpeg", quality));
+            } catch { clearTimeout(decodeTimeout); URL.revokeObjectURL(objectUrl); resolve(null); }
+        };
+        img.onerror = () => {
+            clearTimeout(decodeTimeout);
+            URL.revokeObjectURL(objectUrl);
+            resolve(null);
+        };
+    });
+};
+
+const version1ImageCache = new Map<string, Promise<string | null>>();
+
+const getVersion1Image = (source: string, fallbackSource = "") => {
+    const optimizedSource = buildCloudinaryDeliveryUrl(
+        source,
+        CLOUDINARY_PDF_TRANSFORMATION
+    );
+    const cacheKey = `${getCloudinaryAssetKey(optimizedSource)}|${fallbackSource}`;
+    const optimizedFallback = buildCloudinaryDeliveryUrl(
+        fallbackSource,
+        CLOUDINARY_PDF_TRANSFORMATION
+    );
+
+    return getOrCreateBoundedCacheEntry(
+        version1ImageCache,
+        cacheKey,
+        async () => {
+            try {
+                return await loadWithImageFallback(
+                    optimizedSource,
+                    optimizedFallback,
+                    (candidate) => compressImageCandidate(candidate, 0.5, 600)
+                );
+            } catch (error) {
+                console.error(error);
+                return null;
+            }
+        }
+    );
+};
+
+const renderChunk = async (rows: any[], selectedFields: Record<string, boolean>, companyName: string
+    , onProgress?: PDFProgressCallback
+) => {
+
+    const { default: jsPDF } = await import("jspdf");
+    const pdf = new jsPDF("p", "mm", "a4");
+    onProgress?.(5);
+
+    const uniqueImages = new Map<string, { source: string; fallback: string }>();
+    if (selectedFields.image) {
+        rows.forEach((row) => {
+            const source = String(row.imageUrl || row.previewUrl || "").trim();
+            if (!source) return;
+
+            const optimizedSource = buildCloudinaryDeliveryUrl(
+                source,
+                CLOUDINARY_PDF_TRANSFORMATION
+            );
+            uniqueImages.set(
+                getCloudinaryAssetKey(optimizedSource),
+                { source, fallback: String(row.fallbackImageUrl || "").trim() }
+            );
+        });
+    }
+
+    await preloadWithConcurrency(
+        [...uniqueImages.values()],
+        ({ source, fallback }) => getVersion1Image(source, fallback),
+        (completed, total) =>
+            onProgress?.(imageLoadProgress(completed, total))
+    );
+    if (uniqueImages.size === 0) onProgress?.(80);
+
+    pdf.setFontSize(14);
+    pdf.setFont("helvetica", "bold");
+
+    pdf.text(
+        companyName,
+        pdf.internal.pageSize.getWidth() / 2,
+        15,
+        { align: "center" }
+    );
+
+    // reset
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+
+    const today = new Date().toLocaleDateString();
+
+    pdf.setFontSize(10);
+    pdf.text(today, 10, 10); // top-left
+
+    let y = 25;
+    const rowHeight = 28;
+    const startX = 8;
+    const totalWidth = 195;
+
+    // selected fields
+    const activeFields = Object.keys(selectedFields).filter(
+        (key) => selectedFields[key as keyof typeof selectedFields]
+    );
+
+    // column weight (important for spacing)
+    const fieldWeights: Record<string, number> = {
+        image: 2.2,
+        barcode: 1.2,
+        item: 2,
+        stone: 1.8,
+        gross: 1,
+        stoneWt: 1,
+        dai: 1,
+        labour: 1.2,
+        labourPuwai: 1.4,
+        price: 1.2,
+        usd: 1.2,
+        size: 1.2
+    };
+
+    const totalWeight = activeFields.reduce(
+        (sum, f) => sum + (fieldWeights[f] || 1),
+        0
+    );
+
+    const colX: Record<string, number> = {};
+    const colWidthMap: Record<string, number> = {};
+
+    let currentX = startX;
+
+    activeFields.forEach((field) => {
+        const width = (fieldWeights[field] / totalWeight) * totalWidth;
+        colX[field] = currentX + 2;
+        colWidthMap[field] = width;
+        currentX += width;
+    });
+    pdf.setFontSize(8.5);
+    pdf.setFont("helvetica", "bold");
+
+    const fieldLabels: Record<string, string> = {
+        image: "Image",
+        barcode: "Barcode",
+        item: "Item",
+        stone: "Lot No.",
+        gross: "Gross",
+        stoneWt: "Net Wt.",
+        dai: "Puwai",
+        labour: "Labour/g",
+  labourPuwai: "Labour + Puwai",
+  price: "Final",
+        usd: "SILVER",
+        size: "Tag"
+    };
+
+    activeFields.forEach((field) => {
+        pdf.text(pdf.splitTextToSize(fieldLabels[field], Math.max(5, colWidthMap[field] - 2)), colX[field], y);
+    });
+    y += 10;
+    pdf.setFont("helvetica", "normal");
+
+    const drawableRowCount = rows.filter((row) => row.data).length;
+    let drawnRowCount = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row.data) continue;
+        const d = { ...row.data };
+
+
+
+        let maxLines = 1;
+
+        activeFields.forEach((field) => {
+            let value = "";
+
+            if (field === "barcode") value = row.barcode;
+            else if (field === "item") value = d.ITEM;
+            else if (field === "stone") value = d["LOT NO."];
+            else if (field === "gross") {
+                value = parseFloat(d["GROSSWT."] || 0).toFixed(3);
+            }
+            else if (field === "stoneWt") {
+                value = parseFloat(d["NET WT."] || 0).toFixed(2);
+            }
+            else if (field === "dai") value = d["PUWAI"];
+            else if (field === "labour") value = String(d["LABOUR PER GRM"] || "");
+            else if (field === "labourPuwai") value = String(d["LABOUR + PUWAI"] || "");
+            else if (field === "price") value = d["FINAL"];
+            else if (field === "usd") value = d.SILVER;
+            else if (field === "size") value = d.TAG;
+            value = String(value);
+
+            const colWidth = colWidthMap[field] - 4;
+            const lines = pdf.splitTextToSize(value, colWidth);
+
+            if (lines.length > maxLines) {
+                maxLines = lines.length;
+            }
+        });
+
+        const dynamicHeight = Math.max(rowHeight, maxLines * 5 + 10);
+
+        // ✅ PAGE BREAK LOGIC (NO ROW CUT)
+        if (y + dynamicHeight > 280) {
+            pdf.addPage();
+
+            // 👉 company name (ADD THIS)
+            pdf.setFontSize(14);
+            pdf.setFont("helvetica", "bold");
+            pdf.text(
+                companyName,
+                pdf.internal.pageSize.getWidth() / 2,
+                15,
+                { align: "center" }
+            );
+
+            // 👉 date (already there)
+            pdf.setFontSize(10);
+            pdf.setFont("helvetica", "normal");
+            pdf.text(today, 10, 10);
+
+            // 👉 adjust Y (IMPORTANT)
+            y = 25;
+            // redraw header on new page
+            pdf.setFont("helvetica", "bold");
+            activeFields.forEach((field) => {
+                pdf.text(pdf.splitTextToSize(fieldLabels[field], Math.max(5, colWidthMap[field] - 2)), colX[field], y);
+            });
+            y += 10;
+            pdf.setFont("helvetica", "normal");
+        }
+
+        // draw border
+        pdf.rect(8, y, 195, dynamicHeight);
+
+        // image
+        const imgSrc = row.imageUrl || row.previewUrl;
+
+        let compressedImg = null;
+
+        if (imgSrc && selectedFields.image) {
+            compressedImg = await getVersion1Image(imgSrc, row.fallbackImageUrl || "");
+
+            if (compressedImg) {
+                pdf.addImage(
+                    compressedImg,
+                    "JPEG",
+                    colX["image"] - 2,
+                    y,
+                    colWidthMap["image"],   // 🔥 dynamic width
+                    dynamicHeight,
+                    `img_${i}`,
+                    "FAST"
+                );
+            }
+        }
+
+        const lineHeight = 5;
+
+        const centerText = (lines: string[], x: number) => {
+            const textBlockHeight = lines.length * lineHeight;
+            const startY = y + (dynamicHeight - textBlockHeight) / 2 + 3;
+            pdf.text(lines, x, startY);
+        };
+
+        activeFields.forEach((field) => {
+            let value = "";
+
+            if (field === "barcode") value = String(row.barcode || "");
+            else if (field === "item") value = String(d.ITEM || "");
+            else if (field === "stone") value = String(d["LOT NO."] || "");
+
+            else if (field === "gross") {
+                const num = parseFloat(d["GROSSWT."] || "0");
+                value = num.toLocaleString("en-US", {
+                    minimumFractionDigits: 3,
+                    maximumFractionDigits: 3
+                });  // FORCE STRING
+            }
+
+            else if (field === "stoneWt") {
+                const num = parseFloat(d["NET WT."] || "0");
+                value = num.toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+
+            else if (field === "dai") {
+                const num = parseFloat(d["PUWAI"] || "0");
+                value = num.toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+            else if (field === "labour") value = String(d["LABOUR PER GRM"] || "");
+            else if (field === "labourPuwai") value = String(d["LABOUR + PUWAI"] || "");
+            else if (field === "price") value = String(d["FINAL"] || "");
+            else if (field === "usd") value = String(d.SILVER || "");
+            else if (field === "size") value = String(d.TAG || "");
+
+            const colWidth = colWidthMap[field] - 4;
+            // const lines = splitText(String(value || ""), colWidth);
+            const lines = pdf.splitTextToSize(value, colWidth);
+            centerText(lines, colX[field]);
+        });
+
+        // move Y dynamically
+        y += dynamicHeight + 2.5;
+        drawnRowCount += 1;
+        onProgress?.(pdfDrawProgress(drawnRowCount, drawableRowCount));
+    }
+    const pageCount = pdf.getNumberOfPages();
+
+    for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+
+        pdf.setFontSize(10);
+
+        pdf.text(
+            `${i}/${pageCount}`,
+            pdf.internal.pageSize.getWidth() - 10,
+            pdf.internal.pageSize.getHeight() - 10
+        );
+    }
+
+    onProgress?.(100);
+    pdf.save(partFilename("products.pdf"));
+    version1ImageCache.clear();
+};
+
+export const generatePDF = async (...args: Parameters<typeof renderChunk>) => {
+  await runPolkiPDFChunks(args[0], async (chunk, progress) => {
+    const chunkArgs = [...args] as Parameters<typeof renderChunk>;
+    chunkArgs[0] = chunk;
+    chunkArgs[renderChunk.length - 1] = progress as never;
+    try { await renderChunk(...chunkArgs); } finally { version1ImageCache.clear(); }
+  }, args[renderChunk.length - 1] as ((progress: number) => void) | undefined);
+};

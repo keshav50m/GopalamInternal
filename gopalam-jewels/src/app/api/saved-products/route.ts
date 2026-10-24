@@ -112,6 +112,8 @@ export async function POST(request: NextRequest) {
         barcode: String(item.barcode).trim(),
         image: item.image || "",           // Cloudinary primary URL
         data: item.data || {},
+        isSold: false,
+        stockStatusUpdatedAt: updatedAt,
         updatedAt,
       };
       if (Object.prototype.hasOwnProperty.call(item, "r2Image")) {

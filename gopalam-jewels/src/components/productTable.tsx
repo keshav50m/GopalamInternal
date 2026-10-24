@@ -68,6 +68,7 @@ export default function ProductTable({
           <tr
             key={i}
             style={{
+              backgroundColor: row.isSold === true ? "#fee2e2" : undefined,
               contentVisibility: "auto",
               containIntrinsicSize: "140px",
             }}

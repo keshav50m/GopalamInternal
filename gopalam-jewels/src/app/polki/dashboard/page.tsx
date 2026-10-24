@@ -1,0 +1,98 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import DashboardCharts from "@/components/polki/dashboard/DashboardCharts";
+import DashboardSearch from "@/components/polki/dashboard/DashboardSearch";
+import DashboardStats from "@/components/polki/dashboard/DashboardStats";
+import DashboardTables from "@/components/polki/dashboard/DashboardTables";
+import type { DashboardData } from "@/components/polki/dashboard/types";
+import styles from "@/components/polki/dashboard/Dashboard.module.css";
+import AdminButton from "@/components/AdminButton";
+import ChangeTypeButton from "@/components/ChangeTypeButton";
+
+export default function DashboardPage() {
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch("/api/polki/dashboard");
+        if (!response.ok) {
+          throw new Error("Unable to load saved products");
+        }
+
+        const data = (await response.json()) as DashboardData & { error?: string };
+        setDashboardData(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to load saved products");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  const stats = dashboardData?.stats || {
+    totalProducts: 0,
+    productsWithImages: 0,
+    productsMissingImages: 0,
+    todaysUploads: 0,
+    uploadsThisMonth: 0,
+  };
+
+  return (
+    <main className={styles.dashboardShell}>
+      <header className={styles.topBar}>
+        <div className={styles.topBarInner}>
+          <div className={styles.brandArea}>
+            <ChangeTypeButton />
+            <div className={styles.brandBlock}>
+              <span>Gopalam Jewels</span>
+              <h1>Admin Dashboard</h1>
+            </div>
+          </div>
+          <AdminButton />
+
+          <nav className={styles.navLinks} aria-label="Primary navigation">
+            <Link className={styles.navLink} href="/polki/scanner">
+              Scanner
+            </Link>
+            <Link className={styles.activeNavLink} href="/polki/dashboard">
+              Dashboard
+            </Link>
+            <Link className={styles.navLink} href="/polki/image-catalogue">
+              Image Catalogue
+            </Link>
+            <Link className={styles.navLink} href="/polki/custom-search">
+              Custom Search
+            </Link>
+            
+          </nav>
+        </div>
+      </header>
+
+      <div className={styles.content}>
+        {loading ? <div className={styles.statusBar}>Loading saved products...</div> : null}
+        {error ? <div className={styles.errorBox}>{error}</div> : null}
+
+        <DashboardStats stats={stats} />
+        <DashboardCharts
+          stoneDistribution={dashboardData?.stoneDistribution || []}
+          uploadTrend={dashboardData?.uploadTrend || []}
+        />
+        <DashboardSearch />
+        <DashboardTables
+          missingImages={dashboardData?.missingImages || []}
+          recentUploads={dashboardData?.recentUploads || []}
+        />
+      </div>
+    </main>
+  );
+}

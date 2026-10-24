@@ -83,7 +83,7 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
       const conflictByBarcode = new Map(nextConflicts.map((conflict) => [conflict.barcode, conflict]));
 
       setRows((currentRows) => currentRows.map((row) => {
-        if (row.__qrExcelImportId !== importId) return row;
+        if (row.__qrExcelImportId !== importId) return productsByBarcode.has(normalizeBarcode(row.barcode)) ? { ...row, isSold: (productsByBarcode.get(normalizeBarcode(row.barcode)) as any)?.isSold === true } : row;
         const barcode = normalizeBarcode(row.barcode);
         const match: any = productsByBarcode.get(barcode);
         const conflict = conflictByBarcode.get(barcode);
@@ -92,6 +92,7 @@ export default function QRCodeExcelUpload({ setRows }: Props) {
         const resolvedImage = resolveProductImageCandidates(match || fallbackProduct, matchedProducts);
         const updatedRow = {
           ...row,
+          isSold: match?.isSold === true,
           data: match?.data || row.data,
           image: resolvedImage.image,
           r2Image: resolvedImage.r2Image,
