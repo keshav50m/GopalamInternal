@@ -93,6 +93,20 @@ test("customer capability and originating catalogue are required", async () => {
   assert.equal((await load(publicRoute).POST(request(""), context)).status, 404);
 });
 
+test("long customization and remarks are preserved in the PDF", async () => {
+  const record = fixture();
+  record.customer.name = "Customer with a longer name ".repeat(3).slice(0, 80);
+  record.catalogueTitle = "A carefully selected jewellery collection ".repeat(3).slice(0, 120);
+  record.customer.remarks = "Please confirm the finishing details before making this selection. ".repeat(20).slice(0, 970) + " REMARKS_END_MARKER";
+  record.products[0].customization.additionalChanges = "Please use a rose gold finish and confirm the stone color. ".repeat(10).slice(0, 470) + " CUSTOM_END_MARKER";
+  const { load } = harness({ record });
+  const response = await load(publicRoute).POST(request(), context);
+  assert.equal(response.status, 200);
+  const text = Buffer.from(await response.arrayBuffer()).toString("latin1");
+  assert.ok(text.includes("CUSTOM_END_MARKER"));
+  assert.ok(text.includes("REMARKS_END_MARKER"));
+});
+
 test("admin PDF download requires authenticated admin access", async () => {
   assert.equal((await harness({ authenticated: false }).load(adminRoute).GET(request(), context)).status, 401);
   assert.equal((await harness({ role: "staff" }).load(adminRoute).GET(request(), context)).status, 403);

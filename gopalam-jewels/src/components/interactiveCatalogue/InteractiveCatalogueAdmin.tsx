@@ -20,6 +20,9 @@ export default function InteractiveCatalogueAdmin() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [createdUrl, setCreatedUrl] = useState("");
+  const [deletingToken, setDeletingToken] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [historyNotice, setHistoryNotice] = useState("");
 
   const loadCatalogues = useCallback(async () => {
     try {
@@ -63,6 +66,21 @@ export default function InteractiveCatalogueAdmin() {
   const absoluteUrl = (token: string) => typeof window === "undefined" ? `/catalogue/${token}` : `${window.location.origin}/catalogue/${token}`;
   const copyLink = async (url: string) => navigator.clipboard.writeText(url);
 
+  const deleteCatalogue = async (catalogue: PreviousCatalogue) => {
+    if (deletingToken || !window.confirm(`Delete "${catalogue.title || "Untitled catalogue"}"?\n\nThis shared link will stop working. Products and existing enquiries will be preserved.`)) return;
+    setDeletingToken(catalogue.token); setHistoryError(""); setHistoryNotice("");
+    try {
+      const response = await fetch(`/api/casting-catalogues/${encodeURIComponent(catalogue.token)}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to delete this catalogue link.");
+      setCatalogues((current) => current.filter((item) => item.token !== catalogue.token));
+      if (createdUrl === absoluteUrl(catalogue.token)) setCreatedUrl("");
+      setHistoryNotice("Catalogue link deleted. It can no longer be opened by customers.");
+      await loadCatalogues();
+    } catch (caught) { setHistoryError(caught instanceof Error ? caught.message : "Unable to delete this catalogue link. Please retry."); }
+    finally { setDeletingToken(null); }
+  };
+
   return <div className={styles.adminGrid}>
     <section className={styles.panel}>
       <div className={styles.sectionHeader}><div><h2>Select Casting products</h2><p>Add products using the same QR and barcode inputs as the Scanner.</p></div><strong>{selected.size} selected</strong></div>
@@ -88,7 +106,11 @@ export default function InteractiveCatalogueAdmin() {
         <button className={styles.primaryButton} disabled={!selectedProducts.length || !hasVisibleField || creating} onClick={createCatalogue}>{creating ? "Generating…" : "Generate Catalogue Link"}</button>
         {createdUrl ? <div className={styles.success}><span>Catalogue created</span><a href={createdUrl} target="_blank" rel="noreferrer">{createdUrl}</a><button onClick={() => copyLink(createdUrl)}>Copy Link</button></div> : null}
       </section>
-      <section className={styles.panel}><h2>Previously generated</h2><div className={styles.history}>{catalogues.map((catalogue) => { const url = absoluteUrl(catalogue.token); return <article key={catalogue.token}><div><strong>{catalogue.title || "Untitled catalogue"}</strong><span>{catalogue.productCount} products · {new Date(catalogue.createdAt).toLocaleDateString()}</span></div><div><a href={url} target="_blank" rel="noreferrer">Open</a><button onClick={() => copyLink(url)}>Copy Link</button></div></article>; })}{!catalogues.length ? <p>No catalogues generated yet.</p> : null}</div></section>
+      <section className={styles.panel}><h2>Previously generated</h2>
+        {historyError ? <div className={styles.error} role="alert">{historyError}</div> : null}
+        {historyNotice ? <div className={styles.notice} role="status">{historyNotice}</div> : null}
+        <div className={styles.history}>{catalogues.map((catalogue) => { const url = absoluteUrl(catalogue.token); return <article key={catalogue.token}><div><strong>{catalogue.title || "Untitled catalogue"}</strong><span>{catalogue.productCount} products · {new Date(catalogue.createdAt).toLocaleDateString()}</span></div><div><a href={url} target="_blank" rel="noreferrer">Open</a><button type="button" onClick={() => copyLink(url)}>Copy Link</button><button type="button" className={styles.deleteLinkButton} disabled={deletingToken !== null} onClick={() => deleteCatalogue(catalogue)}>{deletingToken === catalogue.token ? "Deleting…" : "Delete"}</button></div></article>; })}{!catalogues.length ? <p>No catalogues generated yet.</p> : null}</div>
+      </section>
     </aside>
   </div>;
 }

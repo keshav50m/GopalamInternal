@@ -12,6 +12,7 @@ export type CastingSharedCatalogueDocument = {
   createdAt: Date;
   createdBy: ObjectId;
   active: boolean;
+  deletedAt?: Date;
 };
 
 let indexPromise: Promise<unknown> | null = null;

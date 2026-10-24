@@ -17,9 +17,10 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number(request.nextUrl.searchParams.get("page")) || 1);
     const pageSize = Math.min(50, Math.max(10, Number(request.nextUrl.searchParams.get("pageSize")) || 20));
     const collection = await getCastingSharedCataloguesCollection();
+    const filter = { deletedAt: { $exists: false } };
     const [total, catalogues] = await Promise.all([
-      collection.countDocuments(),
-      collection.find({}).sort({ createdAt: -1 }).skip((page - 1) * pageSize).limit(pageSize).toArray(),
+      collection.countDocuments(filter),
+      collection.find(filter).sort({ createdAt: -1 }).skip((page - 1) * pageSize).limit(pageSize).toArray(),
     ]);
     return NextResponse.json({
       catalogues: catalogues.map((catalogue) => ({

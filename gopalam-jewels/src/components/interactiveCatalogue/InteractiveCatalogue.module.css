@@ -52,9 +52,11 @@
 .success button, .history button { background: #43391f; justify-self: start; padding: 7px 10px; }
 .enquiryNotification { color: #fff; background: #43391f; border-radius: 999px; padding: 9px 13px; text-decoration: none; font-size: 13px; font-weight: 700; }
 .history { display: grid; gap: 10px; }
-.history article { border-top: 1px solid #eee5d5; padding-top: 10px; display: flex; justify-content: space-between; gap: 12px; }
+.history article { border-top: 1px solid #eee5d5; padding-top: 10px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .history article > div { display: grid; gap: 4px; }
-.history article > div:last-child { display: flex; align-items: center; }
+.history article > div:last-child { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.history .deleteLinkButton { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; }
+.history .deleteLinkButton:disabled { opacity: .55; cursor: not-allowed; }
 .history span { color: #746b5d; font-size: 12px; }
 .history a { color: #8a6a24; font-size: 13px; font-weight: 700; }
 
@@ -80,15 +82,30 @@
 .addSelectionButton, .removeSelectionButton { width: calc(100% - 28px); margin: 0 14px 14px; border: 0; border-radius: 7px; padding: 11px; color: #fff; font-weight: 700; cursor: pointer; }
 .addSelectionButton { background: #9a7a30; }
 .removeSelectionButton { background: #665b49; }
-.productActions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 14px 14px; }
+.productActions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 0 14px 14px; }
+.productActions > button, .productActions .cardQuantity { min-height: 44px; }
 .productActions .addSelectionButton { width: 100%; margin: 0; }
 .productActions button:disabled { opacity: .55; cursor: not-allowed; }
 .customizeButton { border: 1px solid #9a7a30; border-radius: 7px; padding: 10px; color: #7a5d1d; background: #fff; font-weight: 700; cursor: pointer; }
 .cardQuantity { display: grid; grid-template-columns: 38px 1fr 38px; align-items: center; overflow: hidden; border: 1px solid #9a7a30; border-radius: 7px; color: #43391f; text-align: center; }
 .cardQuantity button { height: 100%; border: 0; color: #fff; background: #9a7a30; font-size: 20px; cursor: pointer; }
-.customizePanel { margin: 0 14px 14px; padding: 12px; display: grid; gap: 9px; border: 1px solid #e6dcc7; border-radius: 8px; background: #faf8f3; }
-.customizePanel label { display: grid; gap: 4px; color: #43391f; font-size: 11px; font-weight: 700; }
-.customizePanel input, .customizePanel textarea { box-sizing: border-box; width: 100%; border: 1px solid #d8c89f; border-radius: 5px; padding: 8px; font: inherit; resize: vertical; }
+.customizationSaved { margin: -5px 14px 14px; color: #60713b; font-size: 12px; text-align: center; }
+.customizationDialog { box-sizing: border-box; width: min(480px, calc(100% - 28px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; color: #30281b; background: #fffdfa; border: 1px solid #e6dcc7; border-radius: 18px; box-shadow: 0 24px 80px rgba(30,22,10,.3); }
+.customizationDialog::backdrop { background: rgba(25,20,12,.58); backdrop-filter: blur(4px); }
+.customizationDialog form { margin: 0; }
+.customizationHeader { display: flex; justify-content: space-between; gap: 16px; padding: 24px 24px 18px; border-bottom: 1px solid #eee5d5; }
+.customizationHeader span { color: #8a6a24; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.customizationHeader h2 { margin: 6px 0; font: 700 26px/1.15 "Playfair Display", serif; }
+.customizationHeader p { margin: 0; color: #746b5d; font-size: 13px; overflow-wrap: anywhere; }
+.customizationHeader > button { flex-shrink: 0; width: 36px; height: 36px; border: 0; border-radius: 50%; color: #60553f; background: #f0ebe2; font-size: 25px; cursor: pointer; }
+.customizationFields { padding: 18px 24px 24px; display: grid; gap: 17px; }
+.customizationFields > p { margin: 0; color: #746b5d; font-size: 13px; }
+.customizationFields label { display: grid; gap: 7px; color: #43391f; font-size: 13px; font-weight: 700; }
+.customizationFields input, .customizationFields textarea { box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #d8c89f; border-radius: 8px; color: #30281b; background: #fff; font-family: inherit; font-size: 16px; resize: vertical; }
+.customizationFields input:focus, .customizationFields textarea:focus { outline: 2px solid #b99b51; outline-offset: 2px; }
+.customizationFields small { color: #8b8172; font-size: 11px; font-weight: 400; text-align: right; }
+.customizationFooter { position: sticky; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px 24px; border-top: 1px solid #eee5d5; background: #fffdfa; }
+.customizationFooter button { min-height: 46px; font-size: 14px; }
 .soldBadge { margin: 0 14px 10px; padding: 6px; border-radius: 6px; color: #991b1b; background: #fef2f2; text-align: center; font-size: 12px; font-weight: 800; text-transform: uppercase; }
 .publicError, .publicStatus { max-width: 650px; margin: 24px auto; padding: 20px; text-align: center; border-radius: 8px; background: #fff; }
 .publicError { color: #991b1b; border: 1px solid #fecaca; }
