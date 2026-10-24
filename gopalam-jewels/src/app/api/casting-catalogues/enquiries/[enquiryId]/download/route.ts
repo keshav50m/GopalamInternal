@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { getCastingCatalogueEnquiriesCollection } from "@/lib/castingCatalogueEnquiries";
-import { getPrivatePdfFromR2 } from "@/lib/r2";
+import { enquiryPdfDownload } from "@/lib/castingEnquiryPdfWorkflow";
+
+export const runtime = "nodejs";
 
 type Context = { params: Promise<{ enquiryId: string }> };
 export async function GET(_: Request, { params }: Context) {
@@ -9,8 +11,8 @@ export async function GET(_: Request, { params }: Context) {
   if (auth.response) return auth.response;
   if (auth.user?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { enquiryId } = await params;
-  const enquiry = await (await getCastingCatalogueEnquiriesCollection()).findOne({ enquiryId, pdfStatus: "ready" });
-  if (!enquiry?.pdfStorageKey) return NextResponse.json({ error: "PDF not found" }, { status: 404 });
-  const bytes = await getPrivatePdfFromR2(enquiry.pdfStorageKey);
-  return new NextResponse(Buffer.from(bytes), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${enquiryId}-selection.pdf"`, "Cache-Control": "private, no-store" } });
+  if (!/^GJ-\d{8}-[A-F0-9]{10}$/.test(enquiryId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const enquiry = await (await getCastingCatalogueEnquiriesCollection()).findOne({ enquiryId });
+  if (!enquiry) return NextResponse.json({ error: "PDF not found" }, { status: 404 });
+  return enquiryPdfDownload(enquiry);
 }

@@ -21,6 +21,25 @@ test("validates positive integer quantities and rejects duplicates", () => {
   ]).error || "", /Invalid/);
 });
 
+test("validates and trims per-product customization", () => {
+  const result = validateEnquirySelections([{
+    selectionId: validSelectionId,
+    quantity: 2,
+    customization: { ringSize: " 14 ", stoneColor: " Blue ", additionalChanges: " Matte finish " },
+  }]);
+  assert.equal(result.error, null);
+  assert.deepEqual(result.selections[0].customization, {
+    ringSize: "14",
+    stoneColor: "Blue",
+    additionalChanges: "Matte finish",
+  });
+  assert.match(validateEnquirySelections([{
+    selectionId: validSelectionId,
+    quantity: 1,
+    customization: { additionalChanges: "x".repeat(501) },
+  }]).error || "", /too long/);
+});
+
 test("validates required customer name and optional mobile format", () => {
   assert.match(validateCustomerDetails({ name: "" }).error || "", /required/);
   assert.match(validateCustomerDetails({ name: "Customer", mobile: "not-a-phone" }).error || "", /valid/);

@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { requireAuthenticatedUser } from "@/lib/auth";
-import { CASTING_CATALOGUE_FIELDS, normalizeCatalogueFields } from "@/lib/castingCatalogue";
+import { CASTING_CATALOGUE_FIELDS, normalizeCatalogueDiscounts, normalizeCatalogueFields } from "@/lib/castingCatalogue";
 import { ensureCastingSharedCatalogueIndexes, getCastingSharedCataloguesCollection } from "@/lib/castingSharedCatalogues";
 import clientPromise from "@/lib/mongodb";
 
@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         title: catalogue.title || "",
         productCount: catalogue.productBarcodes.length,
         visibleFields: catalogue.visibleFields,
+        discounts: catalogue.discounts || { pricePercent: 0, usdPercent: 0 },
         createdAt: catalogue.createdAt,
         active: catalogue.active,
       })),
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Select at least one visible field" }, { status: 400 });
     }
     const title = String(body.title || "").trim().slice(0, 120);
+    const discounts = normalizeCatalogueDiscounts(body.discounts);
     const client = await clientPromise;
     const matched = await client.db("gopalamJewels").collection("savedProducts")
       .find({ barcode: { $in: productBarcodes } }).project({ barcode: 1 }).toArray();
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
       token,
       productBarcodes,
       visibleFields,
+      discounts,
       ...(title ? { title } : {}),
       createdAt: new Date(),
       createdBy: new ObjectId(auth.user._id),

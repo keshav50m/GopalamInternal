@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { MongoServerError } from "mongodb";
 import { NextRequest, NextResponse } from "next/server";
-import { CASTING_CATALOGUE_FIELDS, catalogueProductValues } from "@/lib/castingCatalogue";
+import { CASTING_CATALOGUE_FIELDS, applyCatalogueDiscounts, catalogueProductValues } from "@/lib/castingCatalogue";
 import {
   ensureCastingCatalogueEnquiryIndexes,
   getCastingCatalogueEnquiriesCollection,
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const totalEntries: Array<{ price: string; usd: string; quantity: number }> = [];
     const enquiryProducts: CastingCatalogueEnquiryProduct[] = resolvedSelections.map((selection) => {
       const product = productByBarcode.get(selection.barcode)!;
-      const values = catalogueProductValues(product);
+      const values = applyCatalogueDiscounts(catalogueProductValues(product), catalogue.discounts);
       const visibleDetails = Object.fromEntries(
         CASTING_CATALOGUE_FIELDS
           .filter((field): field is DetailField => field !== "image" && catalogue.visibleFields[field])
@@ -140,6 +140,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         visibleDetails,
         image: imageRemoved ? "" : normalizeStoredImageUrl(product.image) || normalizeStoredImageUrl(catalogueImage?.image),
         r2Image: imageRemoved ? "" : normalizeStoredImageUrl(product.r2Image) || normalizeStoredImageUrl(catalogueImage?.r2Image),
+        ...(selection.customization ? { customization: selection.customization } : {}),
       };
     });
 
@@ -153,6 +154,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       catalogueToken: token,
       catalogueTitle: catalogue.title || "Casting Jewellery Catalogue",
       visibleFields: catalogue.visibleFields,
+      discounts: catalogue.discounts || { pricePercent: 0, usdPercent: 0 },
       customer: customerResult.customer,
       products: enquiryProducts,
       distinctProductCount: enquiryProducts.length,
@@ -160,7 +162,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       totals,
       submittedAt,
       status: "new",
-      pdfStatus: "pending",
+      pdfStatus: "on-demand",
       notificationStatus: "unread",
       customerAccessToken,
       submissionKey,

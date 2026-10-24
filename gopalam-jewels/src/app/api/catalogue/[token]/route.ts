@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Document, Filter } from "mongodb";
 import {
   CASTING_CATALOGUE_FIELDS,
+  applyCatalogueDiscounts,
   catalogueProductValues,
-  escapeCatalogueSearch,
 } from "@/lib/castingCatalogue";
 import { getCastingSharedCataloguesCollection } from "@/lib/castingSharedCatalogues";
 import { createCatalogueSelectionId } from "@/lib/castingCatalogueSelection";
@@ -25,12 +25,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const page = Math.max(1, Number(request.nextUrl.searchParams.get("page")) || 1);
     const pageSize = Math.min(60, Math.max(12, Number(request.nextUrl.searchParams.get("pageSize")) || 24));
-    const search = request.nextUrl.searchParams.get("search")?.trim().slice(0, 100) || "";
     const clauses: Filter<Document>[] = [{ barcode: { $in: catalogue.productBarcodes } }];
-    if (search) {
-      const expression = { $regex: escapeCatalogueSearch(search), $options: "i" };
-      clauses.push({ $or: [{ barcode: expression }, { "data.ITEMNO": expression }] });
-    }
     const query: Filter<Document> = { $and: clauses };
     const client = await clientPromise;
     const db = client.db("gopalamJewels");
@@ -38,7 +33,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const [total, products] = await Promise.all([
       productsCollection.countDocuments(query),
       productsCollection.find(query)
-        .project({ barcode: 1, image: 1, r2Image: 1, imageRemoved: 1, data: 1 })
+        .project({ barcode: 1, image: 1, r2Image: 1, imageRemoved: 1, data: 1, isSold: 1 })
         .sort({ barcode: 1 })
         .skip((page - 1) * pageSize)
         .limit(pageSize)
@@ -62,10 +57,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
       catalogue: {
         title: catalogue.title || "Casting Jewellery Catalogue",
         visibleFields: catalogue.visibleFields,
+        discounts: catalogue.discounts || { pricePercent: 0, usdPercent: 0 },
         createdAt: catalogue.createdAt,
       },
       products: products.map((product) => {
-        const values = catalogueProductValues(product);
+        const values = applyCatalogueDiscounts(catalogueProductValues(product), catalogue.discounts);
         const barcode = String(product.barcode || "").trim();
         const visibleValues = Object.fromEntries(
           CASTING_CATALOGUE_FIELDS
@@ -73,7 +69,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
             .map((field) => [field, values[field]])
         );
         const selectionId = createCatalogueSelectionId(token, barcode);
-        if (!includeImages || product.imageRemoved) return { selectionId, values: visibleValues };
+        if (!includeImages || product.imageRemoved) return { selectionId, values: visibleValues, isSold: product.isSold === true };
         const resolved = withResolvedImageFields(product);
         const catalogueImage = imageByItemNo.get(String(product.data?.ITEMNO || "").trim());
         const primaryImageUrl = resolved.resolvedImageUrl || catalogueImage?.resolvedImageUrl || "";
@@ -85,6 +81,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           values: visibleValues,
           primaryImageUrl,
           fallbackImageUrl,
+          isSold: product.isSold === true,
         };
       }),
       total,

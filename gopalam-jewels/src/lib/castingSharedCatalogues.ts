@@ -7,6 +7,7 @@ export type CastingSharedCatalogueDocument = {
   token: string;
   productBarcodes: string[];
   visibleFields: CastingCatalogueFieldSettings;
+  discounts?: { pricePercent: number; usdPercent: number };
   title?: string;
   createdAt: Date;
   createdBy: ObjectId;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { getCastingCatalogueEnquiriesCollection } from "@/lib/castingCatalogueEnquiries";
-import { ensureEnquiryPdf } from "@/lib/castingEnquiryPdfWorkflow";
+import { enquiryPdfDownload } from "@/lib/castingEnquiryPdfWorkflow";
 
 type Context = { params: Promise<{ enquiryId: string }> };
 const authorize = async () => {
@@ -20,6 +20,7 @@ export async function GET(_: Request, { params }: Context) {
 export async function POST(_: Request, { params }: Context) {
   const denied = await authorize(); if (denied) return denied;
   const { enquiryId } = await params;
-  const result = await ensureEnquiryPdf(enquiryId);
-  return result.status === "missing" ? NextResponse.json({ error: "Not found" }, { status: 404 }) : NextResponse.json({ status: result.status }, { status: result.status === "failed" ? 500 : 200 });
+  if (!/^GJ-\d{8}-[A-F0-9]{10}$/.test(enquiryId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const enquiry = await (await getCastingCatalogueEnquiriesCollection()).findOne({ enquiryId });
+  return enquiry ? enquiryPdfDownload(enquiry) : NextResponse.json({ error: "Not found" }, { status: 404 });
 }

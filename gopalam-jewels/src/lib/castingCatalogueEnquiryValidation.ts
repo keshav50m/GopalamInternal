@@ -3,8 +3,17 @@ export const MAX_ENQUIRY_QUANTITY = 100;
 export const MAX_CUSTOMER_NAME_LENGTH = 80;
 export const MAX_MOBILE_LENGTH = 30;
 export const MAX_REMARKS_LENGTH = 1000;
+export const MAX_RING_SIZE_LENGTH = 30;
+export const MAX_STONE_COLOR_LENGTH = 80;
+export const MAX_ADDITIONAL_CHANGES_LENGTH = 500;
 
-export type ValidatedEnquirySelection = { selectionId: string; quantity: number };
+export type ProductCustomization = { ringSize?: string; stoneColor?: string; additionalChanges?: string };
+export type ValidatedEnquirySelection = { selectionId: string; quantity: number; customization?: ProductCustomization };
+
+const optionalLimitedText = (value: unknown, maximum: number) => {
+  const text = String(value || "").trim();
+  return text.length <= maximum ? text : null;
+};
 
 export const validateEnquirySelections = (value: unknown) => {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_ENQUIRY_ITEMS) {
@@ -26,8 +35,22 @@ export const validateEnquirySelections = (value: unknown) => {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_ENQUIRY_QUANTITY) {
       return { error: `Quantity must be a whole number from 1 to ${MAX_ENQUIRY_QUANTITY}`, selections: [] as ValidatedEnquirySelection[] };
     }
+    const rawCustomization = candidate.customization && typeof candidate.customization === "object"
+      ? candidate.customization as Record<string, unknown>
+      : {};
+    const ringSize = optionalLimitedText(rawCustomization.ringSize, MAX_RING_SIZE_LENGTH);
+    const stoneColor = optionalLimitedText(rawCustomization.stoneColor, MAX_STONE_COLOR_LENGTH);
+    const additionalChanges = optionalLimitedText(rawCustomization.additionalChanges, MAX_ADDITIONAL_CHANGES_LENGTH);
+    if (ringSize === null || stoneColor === null || additionalChanges === null) {
+      return { error: "One or more customization details are too long", selections: [] as ValidatedEnquirySelection[] };
+    }
+    const customization = {
+      ...(ringSize ? { ringSize } : {}),
+      ...(stoneColor ? { stoneColor } : {}),
+      ...(additionalChanges ? { additionalChanges } : {}),
+    };
     seen.add(selectionId);
-    selections.push({ selectionId, quantity });
+    selections.push({ selectionId, quantity, ...(Object.keys(customization).length ? { customization } : {}) });
   }
   return { error: null, selections };
 };

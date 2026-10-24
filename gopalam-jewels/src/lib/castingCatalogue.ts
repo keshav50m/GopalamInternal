@@ -53,3 +53,28 @@ export const catalogueProductValues = (product: Document) => ({
   usd: String(product.data?.USD ?? "").trim(),
   size: String(product.data?.SIZE ?? "").trim(),
 });
+
+export const normalizeCatalogueDiscounts = (value: unknown) => {
+  const candidate = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const normalize = (input: unknown) => {
+    const number = Number(input);
+    return Number.isFinite(number) ? Math.min(100, Math.max(0, number)) : 0;
+  };
+  return { pricePercent: normalize(candidate.pricePercent), usdPercent: normalize(candidate.usdPercent) };
+};
+
+export const applyCatalogueDiscounts = <T extends ReturnType<typeof catalogueProductValues>>(
+  values: T,
+  discounts?: { pricePercent?: number; usdPercent?: number }
+) => {
+  const discounted = { ...values };
+  const apply = (raw: string, percent = 0) => {
+    const number = Number(raw.replace(/,/g, "").trim());
+    return raw && Number.isFinite(number) && percent > 0
+      ? String(Math.round(number * (1 - percent / 100) * 100) / 100)
+      : raw;
+  };
+  discounted.price = apply(values.price, discounts?.pricePercent);
+  discounted.usd = apply(values.usd, discounts?.usdPercent);
+  return discounted;
+};

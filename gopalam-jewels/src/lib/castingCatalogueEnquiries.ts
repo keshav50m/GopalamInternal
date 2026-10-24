@@ -9,6 +9,7 @@ export type CastingCatalogueEnquiryProduct = {
   visibleDetails: Record<string, string>;
   image: string;
   r2Image: string;
+  customization?: { ringSize?: string; stoneColor?: string; additionalChanges?: string };
 };
 
 export type CastingCatalogueEnquiryDocument = {
@@ -18,6 +19,7 @@ export type CastingCatalogueEnquiryDocument = {
   catalogueToken: string;
   catalogueTitle: string;
   visibleFields: CastingCatalogueFieldSettings;
+  discounts?: { pricePercent: number; usdPercent: number };
   customer: { name: string; mobile?: string; remarks?: string };
   products: CastingCatalogueEnquiryProduct[];
   distinctProductCount: number;
@@ -25,7 +27,7 @@ export type CastingCatalogueEnquiryDocument = {
   totals: { tagPrice?: number; usd?: number };
   submittedAt: Date;
   status: "new";
-  pdfStatus: "pending" | "processing" | "ready" | "failed";
+  pdfStatus: "on-demand" | "pending" | "processing" | "ready" | "failed";
   notificationStatus: "unread" | "read";
   customerAccessToken?: string;
   pdfStorageKey?: string;

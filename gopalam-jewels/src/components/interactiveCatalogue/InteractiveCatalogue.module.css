@@ -24,6 +24,17 @@
 .secondaryButton, .pagination button { background: #64748b; }
 .primaryButton:disabled, .pagination button:disabled { opacity: .5; cursor: not-allowed; }
 .error { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 11px; margin-bottom: 14px; }
+.notice { color: #365314; background: #f7fee7; border: 1px solid #d9f99d; border-radius: 6px; padding: 11px; margin: 14px 0; }
+.importGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.importGrid > div { margin: 0 !important; }
+.importGrid > div > button, .importButton { width: 100%; min-height: 43px; border: 1px solid #c9a84c !important; border-radius: 7px !important; padding: 10px !important; color: #43391f; background: #fffaf0 !important; font-weight: 700; cursor: pointer; }
+.importStatus { grid-column: 1 / -1; color: #746b5d; font-size: 12px; }
+.inStockLabel, .soldLabel, .removeRowButton { border: 0; border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700; }
+.inStockLabel { display: inline-block; color: #fff; background: #15803d; } .soldLabel { display: inline-block; color: #fff; background: #b91c1c; } .removeRowButton { color: #991b1b; background: #fef2f2; cursor: pointer; }
+.stockFilter { margin: 0 0 14px; display: flex; align-items: center; gap: 8px; color: #43391f; font-size: 13px; font-weight: 700; }
+.discountGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.discountGrid label { display: grid; gap: 6px; color: #43391f; font-size: 12px; font-weight: 700; }
+.discountGrid input { width: 100%; box-sizing: border-box; border: 1px solid #d8c89f; border-radius: 6px; padding: 9px; font: inherit; }
 .tableWrap { overflow-x: auto; }
 .productTable { min-width: 650px; margin: 0; }
 .productTable td { font-size: 13px; }
@@ -69,12 +80,23 @@
 .addSelectionButton, .removeSelectionButton { width: calc(100% - 28px); margin: 0 14px 14px; border: 0; border-radius: 7px; padding: 11px; color: #fff; font-weight: 700; cursor: pointer; }
 .addSelectionButton { background: #9a7a30; }
 .removeSelectionButton { background: #665b49; }
+.productActions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 14px 14px; }
+.productActions .addSelectionButton { width: 100%; margin: 0; }
+.productActions button:disabled { opacity: .55; cursor: not-allowed; }
+.customizeButton { border: 1px solid #9a7a30; border-radius: 7px; padding: 10px; color: #7a5d1d; background: #fff; font-weight: 700; cursor: pointer; }
+.cardQuantity { display: grid; grid-template-columns: 38px 1fr 38px; align-items: center; overflow: hidden; border: 1px solid #9a7a30; border-radius: 7px; color: #43391f; text-align: center; }
+.cardQuantity button { height: 100%; border: 0; color: #fff; background: #9a7a30; font-size: 20px; cursor: pointer; }
+.customizePanel { margin: 0 14px 14px; padding: 12px; display: grid; gap: 9px; border: 1px solid #e6dcc7; border-radius: 8px; background: #faf8f3; }
+.customizePanel label { display: grid; gap: 4px; color: #43391f; font-size: 11px; font-weight: 700; }
+.customizePanel input, .customizePanel textarea { box-sizing: border-box; width: 100%; border: 1px solid #d8c89f; border-radius: 5px; padding: 8px; font: inherit; resize: vertical; }
+.soldBadge { margin: 0 14px 10px; padding: 6px; border-radius: 6px; color: #991b1b; background: #fef2f2; text-align: center; font-size: 12px; font-weight: 800; text-transform: uppercase; }
 .publicError, .publicStatus { max-width: 650px; margin: 24px auto; padding: 20px; text-align: center; border-radius: 8px; background: #fff; }
 .publicError { color: #991b1b; border: 1px solid #fecaca; }
 .publicPagination { margin-top: 26px; display: flex; align-items: center; justify-content: center; gap: 14px; }
 .publicPagination button:disabled { opacity: .45; }
 .confirmation { max-width: 650px; margin: 0 auto 20px; padding: 16px; display: grid; gap: 6px; color: #166534; background: #f0fdf4; border: 1px solid #86efac; border-radius: 9px; text-align: center; }
 .confirmation button { justify-self: center; }
+.confirmationPage { padding: 34px 14px; }
 .enquiriesLayout { display: grid; gap: 20px; }
 .enquiryProducts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-top: 16px; }
 .enquiryProducts article { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 10px; padding: 10px; background: #faf8f3; border: 1px solid #e6dcc7; border-radius: 8px; }
@@ -82,6 +104,12 @@
 .enquiryProducts article div { display: grid; gap: 3px; font-size: 12px; overflow-wrap: anywhere; }
 .enquiryActions { margin-top: 16px; display: flex; gap: 10px; }
 .enquiryActions a { display: inline-block; text-decoration: none; }
+.rowActions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.rowActions a { white-space: nowrap; text-decoration: none; }
+.enquiryDetailRow > td { padding: 0 !important; background: #faf8f3; }
+.inlineEnquiryDetail { padding: 18px; border: 2px solid #d8c89f; border-top: 0; }
+.inlineEnquiryHeader { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
+.inlineEnquiryHeader h3, .inlineEnquiryHeader p { margin: 0 0 6px; }
 .viewSelectionButton { position: fixed; z-index: 20; right: 22px; bottom: 22px; border: 0; border-radius: 999px; padding: 14px 20px; color: #fff; background: #43391f; box-shadow: 0 8px 24px rgba(35,28,18,.28); font-weight: 700; cursor: pointer; }
 .cartOverlay { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end; background: rgba(20,16,10,.55); }
 .cartPanel { width: min(680px, 100%); height: 100%; overflow-y: auto; box-sizing: border-box; padding: 22px; background: #f8f5ef; box-shadow: -10px 0 30px rgba(0,0,0,.18); }
@@ -103,6 +131,8 @@
 .quantityRow button { min-width: 34px; cursor: pointer; font-weight: 700; }
 .quantityRow input { width: 52px; padding: 4px; text-align: center; }
 .quantityRow .cartRemoveButton { margin-left: auto; padding: 0 9px; color: #991b1b; border-color: #fecaca; background: #fef2f2; }
+.cartCustomization { margin-top: 10px; padding: 9px; display: grid; gap: 4px; border-radius: 6px; color: #43391f; background: #faf8f3; font-size: 11px; }
+.cartCustomization button { justify-self: start; border: 0; padding: 0; color: #8a6a24; background: transparent; font-weight: 700; cursor: pointer; }
 .cartTotals { margin: 16px 0; padding: 14px; display: grid; gap: 8px; background: #fff; border: 1px solid #e6dcc7; border-radius: 9px; }
 .cartTotals div { display: flex; justify-content: space-between; }
 .enquiryForm { padding: 18px; display: grid; gap: 14px; background: #fff; border: 1px solid #e6dcc7; border-radius: 10px; }
@@ -124,6 +154,7 @@
   .cartPanel { padding: 14px; } .cartHeader { top: -14px; margin: -14px -14px 14px; padding: 15px; }
   .cartItem { grid-template-columns: 78px minmax(0,1fr); padding: 10px; gap: 10px; }
   .enquiryProducts { grid-template-columns: 1fr; }
+  .importGrid { grid-template-columns: 1fr 1fr; }
   .cartImage { width: 78px; height: 78px; } .cartItemDetails dl { grid-template-columns: 1fr; }
 }
-@media (max-width: 420px) { .productGrid { grid-template-columns: 1fr; } .fields { grid-template-columns: 1fr; } }
+@media (max-width: 420px) { .productGrid { grid-template-columns: 1fr; } .fields, .discountGrid { grid-template-columns: 1fr; } }
